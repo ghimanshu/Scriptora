@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: publishing_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-local-password}
+      POSTGRES_DB: publishing
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U publishing_dev -d publishing"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  mail:
+    image: axllent/mailpit:v1.27.8
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  scanner:
+    image: clamav/clamav:1.4.3
+    ports: ["127.0.0.1:3310:3310"]
+    volumes: ["signatures:/var/lib/clamav"]
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+  api:
+    restart: unless-stopped
+    build: .
+    env_file: .env
+    environment: &runtime
+      DATABASE_URL: postgresql+psycopg://publishing_dev:${POSTGRES_PASSWORD:-replace-local-password}@db:5432/publishing
+      SMTP_HOST: mail
+      SCANNER_HOST: scanner
+      LOCAL_STORAGE_ROOT: /srv/app/var/private-files
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["uploads:/srv/app/var/private-files"]
+    depends_on:
+      db: {condition: service_healthy}
+      scanner: {condition: service_healthy}
+      mail: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+  worker:
+    restart: unless-stopped
+    build: .
+    command: ["python", "-m", "app.workers.main"]
+    env_file: .env
+    environment: *runtime
+    volumes: ["uploads:/srv/app/var/private-files"]
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  database:
+  uploads:
+  signatures:

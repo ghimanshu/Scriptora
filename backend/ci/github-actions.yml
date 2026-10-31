@@ -1,0 +1,30 @@
+# Install at repository-root .github/workflows/backend.yml to enable hosted CI.
+name: Backend
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: publishing_test
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: publishing_test
+        ports: ["5432:5432"]
+        options: --health-cmd="pg_isready -U publishing_test" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      JWT_SIGNING_KEY: ci-test-only-signing-key-at-least-32-characters
+      TEST_DATABASE_URL: postgresql+psycopg://publishing_test:test-only@127.0.0.1:5432/publishing_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - run: pip install -r requirements.lock
+      - run: sh scripts/ci.sh

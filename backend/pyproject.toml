@@ -1,0 +1,17 @@
+[project]
+name = "scriptora-publishing"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "sqlalchemy>=2.0,<2.1", "psycopg[binary]>=3.2,<4", "alembic>=1.14,<2", "pydantic-settings>=2.7,<3", "argon2-cffi>=23,<26", "PyJWT>=2.10,<3", "python-multipart>=0.0.20", "email-validator>=2.2,<3", "boto3>=1.35,<2", "pypdf>=5,<7", "defusedxml>=0.7,<1", "cryptography>=50,<51"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--basetemp=var/pytest-tmp"
+[tool.ruff]
+line-length = 100
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true
