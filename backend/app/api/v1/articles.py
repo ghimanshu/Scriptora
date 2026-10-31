@@ -24,7 +24,19 @@ def list_articles(
     user=Depends(current_user),
     db=Depends(database),
 ):
-    return page(db, Article, select(Article).where(Article.author_id == user.id), limit, cursor)
+    result = page(db, Article, select(Article).where(Article.author_id == user.id), limit, cursor)
+    version_ids = [
+        UUID(item["current_version_id"])
+        for item in result["items"]
+        if item["current_version_id"]
+    ]
+    versions = db.scalars(
+        select(ArticleVersion).where(ArticleVersion.id.in_(version_ids))
+    ).all()
+    titles = {str(version.id): version.data.get("title", "") for version in versions}
+    for item in result["items"]:
+        item["title"] = titles.get(item["current_version_id"], "")
+    return result
 
 
 @router.post("/articles", status_code=201)

@@ -65,6 +65,40 @@ test("author dashboard handles empty data, navigation, and small screens", async
     page.getByRole("button", { name: "Drafts", exact: true }),
   ).toHaveClass("selected");
 });
+test("author dashboard handles article records without a title", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", (route) =>
+    route.fulfill({
+      json: {
+        id: "author",
+        name: "Test Author",
+        roles: ["AUTHOR"],
+        email: "author@example.test",
+      },
+    }),
+  );
+  await page.route("**/api/v1/articles", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "article",
+            status: "DRAFT",
+            created_at: "2026-10-31T00:00:00Z",
+            current_version_number: 1,
+          },
+        ],
+        next_cursor: null,
+      },
+    }),
+  );
+
+  await page.goto("/author");
+  await expect(page.getByRole("link", { name: "Untitled manuscript" })).toBeVisible();
+  await page.getByLabel("Search manuscripts on this page").fill("draft");
+  await expect(page.getByRole("link", { name: "Untitled manuscript" })).toHaveCount(0);
+});
 test("an upstream failure is visible and can be retried", async ({ page }) => {
   await page.route("**/api/v1/me", (route) =>
     route.fulfill({ json: { id: "a", name: "Author", roles: ["AUTHOR"] } }),

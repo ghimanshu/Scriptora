@@ -11,7 +11,7 @@ export function FileUpload({
   onUploaded,
 }: {
   articleId: string;
-  kind?: string;
+  kind?: "manuscript" | "payment_proof";
   onUploaded: (file: Upload) => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -40,7 +40,7 @@ export function FileUpload({
             setBusy(true);
             try {
               const data = new FormData();
-              data.append("kind", kind);
+              data.append("kind", kind === "payment_proof" ? "PROOF" : "MANUSCRIPT");
               data.append("article_id", articleId);
               data.append("file", selected);
               const upload = await api<Upload>("/files", {

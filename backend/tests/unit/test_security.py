@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from app.core.config import Settings
 from app.core.security import hash_password, verify_password
 from app.integrations.storage import LocalStorage
-from app.services.files import validate_bytes
+from app.services.files import normalize_kind, validate_bytes
 
 
 def test_argon2id_and_wrong_password():
@@ -62,4 +62,24 @@ def test_private_storage_rejects_traversal(tmp_path, monkeypatch):
 def test_invalid_uploads_rejected(filename, mime, data, kind):
     with pytest.raises(HTTPException) as error:
         validate_bytes(filename, mime, data, kind)
+    assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "submitted,expected",
+    [
+        ("MANUSCRIPT", "MANUSCRIPT"),
+        ("manuscript", "MANUSCRIPT"),
+        ("PROOF", "PROOF"),
+        ("payment_proof", "PROOF"),
+        ("annotation", "ANNOTATION"),
+    ],
+)
+def test_upload_kind_is_normalized(submitted, expected):
+    assert normalize_kind(submitted) == expected
+
+
+def test_unknown_upload_kind_rejected():
+    with pytest.raises(HTTPException) as error:
+        normalize_kind("unknown")
     assert error.value.status_code == 422

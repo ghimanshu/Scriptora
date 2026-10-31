@@ -25,7 +25,29 @@ export function ArticleWorkspace({
   const [summary, setSummary] = useState("");
   const [confirm, setConfirm] = useState(false);
   const key = useRef("");
+  const draftForm = useRef<HTMLFormElement>(null);
   const a = article.data;
+  async function saveDraft(fields: FormData) {
+    if (!a?.current_version) {
+      throw new Error("Reload the article before saving your draft.");
+    }
+    const metadata = {
+      ...a.current_version.data,
+      title: String(fields.get("title") || ""),
+      abstract: String(fields.get("abstract") || ""),
+    };
+    return api<Article>(`/articles/${id}`, {
+      method: "PATCH",
+      headers: {
+        "If-Match": String(a.lock_version),
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        metadata,
+        manuscript_file_id: file || a.current_version.manuscript_file_id || null,
+      }),
+    });
+  }
   return (
     <>
       <ErrorNotice error={article.error || error} retry={article.reload} />
@@ -116,6 +138,7 @@ export function ArticleWorkspace({
                         : "Continue your draft"}
                     </h2>
                     <form
+                      ref={draftForm}
                       className="form-stack"
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -124,15 +147,7 @@ export function ArticleWorkspace({
                         try {
                           const fields = new FormData(e.currentTarget);
                           if (a.status === "DRAFT") {
-                            await api(`/articles/${id}`, {
-                              method: "PATCH",
-                              headers: { "If-Match": String(a.lock_version) },
-                              body: JSON.stringify({
-                                title: fields.get("title"),
-                                abstract: fields.get("abstract"),
-                                ...(file ? { manuscript_file_id: file } : {}),
-                              }),
-                            });
+                            await saveDraft(fields);
                           } else {
                             if (!confirm || !file)
                               throw new Error(
@@ -247,10 +262,17 @@ export function ArticleWorkspace({
                     onClick={async () => {
                       setBusy(true);
                       try {
+                        if (!file && !a.current_version?.manuscript_file_id) {
+                          throw new Error("Upload a manuscript before submitting.");
+                        }
+                        const fields = draftForm.current
+                          ? new FormData(draftForm.current)
+                          : new FormData();
+                        const saved = await saveDraft(fields);
                         key.current ||= crypto.randomUUID();
                         await command(
                           `/articles/${id}/submit`,
-                          { expected_version: a.lock_version },
+                          { expected_version: saved.lock_version },
                           key.current,
                         );
                         await article.reload();

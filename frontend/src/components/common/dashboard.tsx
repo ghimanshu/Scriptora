@@ -260,7 +260,9 @@ export function Dashboard({
               articles={items.filter(
                 (a) =>
                   (filter === "ALL" || a.status === filter) &&
-                  a.title.toLowerCase().includes(search.toLowerCase()),
+                  (typeof a.title === "string" ? a.title : "")
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
               )}
             />
           ))

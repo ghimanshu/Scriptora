@@ -12,6 +12,18 @@ from app.integrations.storage import storage
 from app.models.articles import File
 
 
+def normalize_kind(kind):
+    normalized = {
+        "MANUSCRIPT": "MANUSCRIPT",
+        "PROOF": "PROOF",
+        "PAYMENT_PROOF": "PROOF",
+        "ANNOTATION": "ANNOTATION",
+    }.get(kind.strip().upper())
+    if normalized is None:
+        fail("INVALID_FILE_KIND", 422)
+    return normalized
+
+
 def validate_bytes(filename, content_type, data, kind):
     suffix = Path(filename or "").suffix.lower()
     types = {
@@ -70,8 +82,7 @@ def validate_bytes(filename, content_type, data, kind):
 
 
 def upload(db, user, kind, article_id, filename, content_type, data):
-    if kind not in ("MANUSCRIPT", "PROOF", "ANNOTATION"):
-        fail("INVALID_FILE_KIND", 422)
+    kind = normalize_kind(kind)
     validate_bytes(filename, content_type, data, kind)
     key = uuid.uuid4().hex
     storage().put(key, data)

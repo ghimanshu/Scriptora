@@ -31,6 +31,16 @@ export interface Article {
   lock_version: number;
   current_version_number: number;
   current_version_id?: string;
+  current_version?: {
+    data: {
+      title: string;
+      abstract: string;
+      keywords: string[];
+      authors: { name: string; email: string; affiliation: string }[];
+      declarations: Record<string, boolean>;
+    };
+    manuscript_file_id?: string | null;
+  };
   approved_version_id?: string;
   allowed_actions: string[];
   assignment?: Assignment;

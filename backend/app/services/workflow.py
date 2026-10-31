@@ -91,6 +91,8 @@ def create_version(db, article, user, data):
 
 def clean_file(db, file_id, user_id=None, kind=None, article_id=None):
     file = db.get(File, file_id) if file_id else None
+    if file and file.scan_status == "PENDING":
+        fail("FILE_SCAN_PENDING", 409)
     if (
         not file
         or file.scan_status != "CLEAN"
