@@ -122,6 +122,7 @@ def mine(user=Depends(current_user), db=Depends(database)):
     return [
         {
             **record(a),
+            "title": db.get(ArticleVersion, a.version_id).data.get("title", ""),
             "effective_assignment_state": "EXPIRED"
             if a.state in LIVE and a.due_at <= now
             else a.state,
@@ -146,7 +147,7 @@ def start(assignment_id: UUID, user=Depends(current_user), db=Depends(database))
     if a.state != "RESERVED":
         fail("RESERVATION_REQUIRED")
     a.state, a.started_at = "ACTIVE", now
-    assignments.transition(db, article, "IN_REVIEW", "STARTED", user)
+    assignments.transition(db, article, "ASSIGNED", "STARTED", user)
     return record(a)
 
 

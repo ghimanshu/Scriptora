@@ -570,6 +570,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/articles/{article_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Article */
+        delete: operations["delete_article_api_v1_admin_articles__article_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/reviewers/{reviewer_id}/approve": {
         parameters: {
             query?: never;
@@ -581,6 +598,23 @@ export interface paths {
         put?: never;
         /** Approve */
         post: operations["approve_api_v1_admin_reviewers__reviewer_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviewers/{reviewer_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Reviewer */
+        post: operations["reject_reviewer_api_v1_admin_reviewers__reviewer_id__reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -604,6 +638,23 @@ export interface paths {
         patch: operations["update_user_api_v1_admin_users__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/articles/{article_id}/reviewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Eligible Reviewers */
+        get: operations["eligible_reviewers_api_v1_admin_articles__article_id__reviewers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/articles/{article_id}/reassign": {
         parameters: {
             query?: never;
@@ -615,6 +666,23 @@ export interface paths {
         put?: never;
         /** Reassign */
         post: operations["reassign_api_v1_admin_articles__article_id__reassign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/articles/{article_id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reassign */
+        post: operations["reassign_api_v1_admin_articles__article_id__assign_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -735,6 +803,23 @@ export interface paths {
         put?: never;
         /** Change Settings */
         post: operations["change_settings_api_v1_admin_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Events */
+        get: operations["audit_events_api_v1_admin_audit_events_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -918,10 +1003,65 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Subjects */
+        get: operations["list_subjects_api_v1_admin_subjects_get"];
         put?: never;
         /** Subject */
         post: operations["subject_api_v1_admin_subjects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/outlets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Outlets */
+        get: operations["list_outlets_api_v1_admin_outlets_get"];
+        put?: never;
+        /** Outlet */
+        post: operations["outlet_api_v1_admin_outlets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_v1_admin_templates_get"];
+        put?: never;
+        /** Template */
+        post: operations["template_api_v1_admin_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Issues */
+        get: operations["list_issues_api_v1_admin_issues_get"];
+        put?: never;
+        /** Issue */
+        post: operations["issue_api_v1_admin_issues_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -939,57 +1079,6 @@ export interface paths {
         put?: never;
         /** Kind */
         post: operations["kind_api_v1_admin_publication_types_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/outlets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Outlet */
-        post: operations["outlet_api_v1_admin_outlets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Template */
-        post: operations["template_api_v1_admin_templates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Issue */
-        post: operations["issue_api_v1_admin_issues_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1111,13 +1200,17 @@ export interface components {
              */
             required: boolean;
         };
+        /** DeleteArticle */
+        DeleteArticle: {
+            /** Reason */
+            reason: string;
+        };
         /** Draft */
         Draft: {
-            /**
-             * Primary Subject Id
-             * Format: uuid
-             */
-            primary_subject_id: string;
+            /** Publication Type Id */
+            publication_type_id?: string | null;
+            /** Primary Subject Id */
+            primary_subject_id?: string | null;
             /**
              * Outlet Id
              * Format: uuid
@@ -1131,6 +1224,20 @@ export interface components {
             metadata: components["schemas"]["Manuscript"];
             /** Manuscript File Id */
             manuscript_file_id?: string | null;
+        };
+        /** DraftUpdate */
+        DraftUpdate: {
+            metadata: components["schemas"]["Manuscript"];
+            /** Manuscript File Id */
+            manuscript_file_id?: string | null;
+            /** Publication Type Id */
+            publication_type_id?: string | null;
+            /** Primary Subject Id */
+            primary_subject_id?: string | null;
+            /** Outlet Id */
+            outlet_id?: string | null;
+            /** Template Id */
+            template_id?: string | null;
         };
         /** Expected */
         Expected: {
@@ -1226,7 +1333,10 @@ export interface components {
         };
         /** Manuscript */
         Manuscript: {
-            /** Title */
+            /**
+             * Title
+             * @default
+             */
             title: string;
             /**
              * Abstract
@@ -1333,6 +1443,12 @@ export interface components {
         };
         /** Register */
         Register: {
+            /**
+             * Role
+             * @default AUTHOR
+             * @enum {string}
+             */
+            role: "AUTHOR" | "REVIEWER";
             /**
              * Email
              * Format: email
@@ -1862,7 +1978,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["VersionInput"];
+                "application/json": components["schemas"]["DraftUpdate"];
             };
         };
         responses: {
@@ -2679,7 +2795,77 @@ export interface operations {
             };
         };
     };
+    delete_article_api_v1_admin_articles__article_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteArticle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     approve_api_v1_admin_reviewers__reviewer_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reviewer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reason"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_reviewer_api_v1_admin_reviewers__reviewer_id__reject_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2749,7 +2935,73 @@ export interface operations {
             };
         };
     };
+    eligible_reviewers_api_v1_admin_articles__article_id__reviewers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reassign_api_v1_admin_articles__article_id__reassign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reassign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reassign_api_v1_admin_articles__article_id__assign_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3014,6 +3266,39 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_events_api_v1_admin_audit_events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3304,6 +3589,38 @@ export interface operations {
             };
         };
     };
+    list_subjects_api_v1_admin_subjects_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     subject_api_v1_admin_subjects_post: {
         parameters: {
             query?: never;
@@ -3337,21 +3654,20 @@ export interface operations {
             };
         };
     };
-    kind_api_v1_admin_publication_types_post: {
+    list_outlets_api_v1_admin_outlets_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TypeInput"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3403,6 +3719,38 @@ export interface operations {
             };
         };
     };
+    list_templates_api_v1_admin_templates_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     template_api_v1_admin_templates_post: {
         parameters: {
             query?: never;
@@ -3436,6 +3784,38 @@ export interface operations {
             };
         };
     };
+    list_issues_api_v1_admin_issues_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     issue_api_v1_admin_issues_post: {
         parameters: {
             query?: never;
@@ -3446,6 +3826,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["IssueInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kind_api_v1_admin_publication_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TypeInput"];
             };
         };
         responses: {

@@ -81,7 +81,7 @@ def test_proof_does_not_publish_and_verification_is_separate(pg):
         ),
     )
     pg.commit()
-    assert article.status == "APPROVED"
+    assert article.status == "PAID"
     assert invoice.status == "OPEN"
     assert attempt.status == "SUBMITTED"
     verify(
@@ -96,7 +96,7 @@ def test_proof_does_not_publish_and_verification_is_separate(pg):
     )
     pg.commit()
     assert invoice.status == "PAID"
-    assert article.status == "APPROVED"
+    assert article.status == "PAYMENT_APPROVED"
     pub = publish(
         pg,
         article.id,
@@ -177,3 +177,41 @@ def test_multi_role_author_cannot_verify_own_payment(pg):
     assert error.value.status_code == 403
     pg.rollback()
     assert pg.get(PaymentAttempt, attempt.id).status == "SUBMITTED"
+
+
+def test_rejected_payment_returns_to_approved_for_corrected_proof(pg):
+    from app.services.payments import reject
+
+    article, invoice, proof, final, admin = approved(pg)
+    author = pg.get(User, article.author_id)
+    attempt = submit_payment(
+        pg,
+        invoice.id,
+        author,
+        PaymentInput(
+            amount_minor=invoice.amount_minor,
+            reference="WRONG123",
+            paid_at=db_now(pg),
+            proof_file_id=proof.id,
+        ),
+    )
+    assert article.status == "PAID"
+    reject(pg, attempt.id, admin, "Receipt not found in bank records")
+    pg.commit()
+    assert article.status == "APPROVED"
+    assert attempt.status == "REJECTED"
+    assert invoice.status == "OPEN"
+    corrected = submit_payment(
+        pg,
+        invoice.id,
+        author,
+        PaymentInput(
+            amount_minor=invoice.amount_minor,
+            reference="CORRECT123",
+            paid_at=db_now(pg),
+            proof_file_id=proof.id,
+        ),
+    )
+    pg.commit()
+    assert corrected.id != attempt.id
+    assert article.status == "PAID"

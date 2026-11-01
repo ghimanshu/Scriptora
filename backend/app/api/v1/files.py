@@ -32,6 +32,8 @@ async def create(
         if not article:
             fail("ARTICLE_NOT_FOUND", 404)
         owner(article, user)
+        if kind == "MANUSCRIPT" and article.status not in ("DRAFT", "REJECTED"):
+            fail("ARTICLE_NOT_EDITABLE", 409)
     cfg = get_settings()
     maximum = cfg.payment_proof_max_bytes if kind == "PROOF" else cfg.manuscript_max_bytes
     data = await file.read(maximum + 1)
@@ -46,6 +48,21 @@ async def create(
 def download(file_id: UUID, user=Depends(current_user), db=Depends(database)):
     file = db.get(File, file_id)
     if not file or file.scan_status != "CLEAN":
+        fail("FILE_NOT_FOUND", 404)
+    linked_article_id = file.article_id
+    if not linked_article_id:
+        linked_article_id = db.scalar(
+            select(ArticleVersion.article_id)
+            .where(ArticleVersion.manuscript_file_id == file.id)
+            .limit(1)
+        )
+    if linked_article_id:
+        article = db.get(Article, linked_article_id)
+        if not article or article.status == "DELETED":
+            fail("FILE_NOT_FOUND", 404)
+        if article.status == "DRAFT" and article.author_id != user.id:
+            fail("FILE_NOT_FOUND", 404)
+    if file.owner_user_id != user.id and not linked_article_id:
         fail("FILE_NOT_FOUND", 404)
     if file.owner_user_id != user.id and "ADMIN" not in roles(db, user):
         if file.kind != "MANUSCRIPT" or not file.article_id:

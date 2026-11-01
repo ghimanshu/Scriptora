@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints
 
 from app.schemas.reviews import Reason
 
@@ -29,7 +29,11 @@ class Reassign(Reason):
 
 
 class Policy(BaseModel):
-    review_duration_hours: int = Field(default=120, gt=0, le=8760)
+    review_duration_hours: int = Field(default=120, ge=120, le=120)
     publication_fee_minor: int = Field(default=250000, gt=0)
     max_live_assignments: int = Field(default=5, gt=0, le=100)
     payment_instructions: str = Field(min_length=5, max_length=4000)
+
+
+class DeleteArticle(BaseModel):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=2000)]

@@ -67,10 +67,24 @@ export async function safeResponse(upstream: Response, requestId: string) {
       422: "Please check the required fields and file status.",
       429: "Too many requests. Please try again later.",
     };
+    let validationMessage: string | undefined;
+    if (upstream.status === 422 && code === "MANUSCRIPT_TEXT_UNREADABLE") {
+      validationMessage = "We could not read text from your manuscript. Upload a text-based PDF or DOCX. Scanned PDFs need OCR before uploading.";
+    }
+    if (upstream.status === 422 && code === "WORD_COUNT_OUTSIDE_TEMPLATE") {
+      validationMessage = "The manuscript word count is outside the template limits. Check the template requirements and upload a revised manuscript.";
+      const details = data?.detail?.details ?? data?.error?.details;
+      const count = details?.word_count;
+      const min = details?.min_words;
+      const max = details?.max_words;
+      if ([count, min, max].every(value => Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000) && min <= max) {
+        validationMessage = `Your manuscript contains ${count} words. This template requires ${min}?${max} words. Upload a manuscript within this range.`;
+      }
+    }
     return failure(
       upstream.status,
       code,
-      messages[upstream.status] ||
+      validationMessage || messages[upstream.status] ||
         "The service could not complete your request.",
       headers.get("x-request-id")!,
     );

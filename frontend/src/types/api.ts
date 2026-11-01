@@ -3,9 +3,11 @@ export type Role = "AUTHOR" | "REVIEWER" | "ADMIN";
 export type ArticleStatus =
   | "DRAFT"
   | "SUBMITTED"
-  | "IN_REVIEW"
-  | "REVIEWED"
+  | "ASSIGNED"
+  | "REJECTED"
   | "APPROVED"
+  | "PAID"
+  | "PAYMENT_APPROVED"
   | "PUBLISH";
 export interface User {
   id: string;
@@ -24,7 +26,10 @@ export interface Article {
   title: string;
   abstract?: string;
   status: ArticleStatus;
-  primary_subject_id?: string;
+  primary_subject_id?: string | null;
+  publication_type_id?: string;
+  outlet_id?: string;
+  template_id?: string;
   subject?: string;
   outlet?: string;
   created_at: string;
@@ -42,7 +47,7 @@ export interface Article {
     manuscript_file_id?: string | null;
   };
   approved_version_id?: string;
-  allowed_actions: string[];
+  allowed_actions?: string[] | null;
   assignment?: Assignment;
   author_names?: string[];
   slug?: string;
@@ -53,6 +58,7 @@ export interface Assignment {
   article_id: string;
   title?: string;
   state: string;
+  effective_assignment_state?: string;
   due_at: string;
   article?: Article;
 }
@@ -106,6 +112,8 @@ export interface Notification {
   message: string;
   read_at?: string;
   created_at: string;
+  type?: string;
+  payload?: { title?: string; message?: string; reason?: string; path?: string };
 }
 export interface Page<T> {
   items: T[];

@@ -11,7 +11,7 @@ from app.api.pagination import page
 from app.api.serialization import record
 from app.core.errors import fail
 from app.integrations.storage import storage
-from app.models.articles import File
+from app.models.articles import Article, File
 from app.models.payments import Publication
 from app.models.taxonomy import Outlet, PublicationType, Subject, Template
 
@@ -35,7 +35,7 @@ def outlets(db=Depends(database)):
     templates = db.scalars(
         select(Template).where(Template.active).order_by(Template.version.desc())
     ).all()
-    latest = {}
+    latest: dict[UUID, str] = {}
     for item in templates:
         latest.setdefault(item.outlet_id, str(item.id))
     return [
@@ -60,7 +60,11 @@ def catalog(
     outlet_id: UUID | None = None,
     db=Depends(database),
 ):
-    query = select(Publication)
+    query = (
+        select(Publication)
+        .join(Article, Article.id == Publication.article_id)
+        .where(Article.status != "DELETED")
+    )
     if subject_id:
         query = query.where(Publication.data["subject_id"].astext == str(subject_id))
     if outlet_id:
@@ -70,7 +74,11 @@ def catalog(
 
 @router.get("/public/articles/{slug}")
 def article(slug: str, db=Depends(database)):
-    item = db.scalar(select(Publication).where(Publication.slug == slug))
+    item = db.scalar(
+        select(Publication)
+        .join(Article, Article.id == Publication.article_id)
+        .where(Publication.slug == slug, Article.status != "DELETED")
+    )
     if not item:
         fail("PUBLICATION_NOT_FOUND", 404)
     return record(item, ("published_by",))
@@ -78,7 +86,11 @@ def article(slug: str, db=Depends(database)):
 
 @router.get("/public/articles/{slug}/download")
 def download(slug: str, db=Depends(database)):
-    item = db.scalar(select(Publication).where(Publication.slug == slug))
+    item = db.scalar(
+        select(Publication)
+        .join(Article, Article.id == Publication.article_id)
+        .where(Publication.slug == slug, Article.status != "DELETED")
+    )
     if not item:
         fail("PUBLICATION_NOT_FOUND", 404)
     file = db.get(File, item.final_file_id)

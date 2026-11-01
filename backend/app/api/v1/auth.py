@@ -13,9 +13,17 @@ from app.core.secrets import seal
 from app.core.security import digest, hash_password, hasher, issue_session, verify_password
 from app.db.session import db_now
 from app.models.taxonomy import Subject
-from app.models.users import AuthSession, OneTimeToken, RateLimit, ReviewerSubject, User, UserRole
+from app.models.users import (
+    AuthSession,
+    OneTimeToken,
+    RateLimit,
+    ReviewerProfile,
+    ReviewerSubject,
+    User,
+    UserRole,
+)
 from app.schemas.auth import Forgot, InvitationAccept, Login, Refresh, Register, Reset, Token
-from app.services.notifications import emit
+from app.services.notifications import admins, emit
 
 router = APIRouter(route_class=IdempotentRoute)
 DUMMY_HASH = hasher.hash(secrets.token_urlsafe(32))
@@ -38,7 +46,7 @@ def throttle(db, key):
         fail("RATE_LIMITED", 429)
 
 
-def one_time(db, user, purpose, context=None):
+def one_time(db, user, purpose, context=None, event_kind=None, extra=None):
     raw = secrets.token_urlsafe(48)
     token = OneTimeToken(
         user_id=user.id,
@@ -49,7 +57,14 @@ def one_time(db, user, purpose, context=None):
     )
     db.add(token)
     db.flush()
-    emit(db, user.id, purpose, [user.id], f"token:{token.id}", {"encrypted_token": seal(raw)})
+    emit(
+        db,
+        user.id,
+        event_kind or purpose,
+        [user.id],
+        f"token:{token.id}",
+        {**(extra or {}), "encrypted_token": seal(raw)},
+    )
 
 
 @router.post("/auth/register", status_code=201)
@@ -64,9 +79,30 @@ def register(data: Register, request: Request, db=Depends(database)):
         )
         db.add(user)
         db.flush()
-        db.add(UserRole(user_id=user.id, role="AUTHOR"))
-        one_time(db, user, "VERIFY_EMAIL")
-    return {"message": "Verification pending; check your email"}
+        db.add(UserRole(user_id=user.id, role=data.role))
+        if data.role == "REVIEWER":
+            db.add(ReviewerProfile(user_id=user.id, approved=False, rejected=False))
+            emit(
+                db,
+                user.id,
+                "REVIEWER_APPLICATION",
+                admins(db),
+                f"reviewer-application:{user.id}",
+                {
+                    "title": "Reviewer application awaiting review",
+                    "message": f"{user.display_name} ({user.email}) applied to become a reviewer.",
+                    "applicant_name": user.display_name,
+                    "applicant_email": user.email,
+                    "path": "/admin/users",
+                },
+            )
+        else:
+            one_time(db, user, "VERIFY_EMAIL")
+    return {
+        "message": "Application submitted for admin review"
+        if data.role == "REVIEWER"
+        else "Verification pending; check your email"
+    }
 
 
 def consume(db, raw, purpose):
@@ -85,14 +121,26 @@ def verify_email(data: Token, db=Depends(database)):
     user.email_verified_at = db_now(db)
 
 
+def require_reviewer_approval(db, user):
+    if roles(db, user) == {"REVIEWER"}:
+        profile = db.get(ReviewerProfile, user.id)
+        if profile and profile.rejected:
+            fail("REVIEWER_APPLICATION_REJECTED", 403)
+        if not profile or not profile.approved:
+            fail("REVIEWER_APPROVAL_PENDING", 403)
+
+
 @router.post("/auth/login")
 def login(data: Login, request: Request, db=Depends(database)):
     throttle(db, "login:" + digest(str(data.email).lower()))
     throttle(db, "login-ip:" + (request.client.host if request.client else "unknown"))
     user = db.scalar(select(User).where(User.email == str(data.email).lower()))
     valid = verify_password(data.password, user.password_hash if user else DUMMY_HASH)
-    if not valid or not user or not user.active or not user.email_verified_at:
+    if not valid or not user or not user.active:
         fail("INVALID_CREDENTIALS", 401)
+    require_reviewer_approval(db, user)
+    if not user.email_verified_at:
+        fail("EMAIL_VERIFICATION_REQUIRED", 403)
     return issue_session(db, user)
 
 
@@ -122,6 +170,7 @@ def refresh(data: Refresh, db=Depends(database)):
     user = db.get(User, session.user_id)
     if session.expires_at <= db_now(db) or not user.active or not user.email_verified_at:
         fail("INVALID_REFRESH_TOKEN", 401)
+    require_reviewer_approval(db, user)
     session.revoked_at = db_now(db)
     return issue_session(db, user, session.token_family_id)
 

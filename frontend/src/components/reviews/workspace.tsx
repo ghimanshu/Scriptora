@@ -7,20 +7,22 @@ import {
   Loading,
   Empty,
 } from "@/components/common/data";
-import { api, command } from "@/lib/api-client";
+import { command } from "@/lib/api-client";
 import { deadline } from "@/lib/formatting";
 import type { Assignment, Article, Page, Version } from "@/types/api";
 export function ReviewWorkspace({ id }: { id: string }) {
   const [cursor, setCursor] = useState("");
-  const assignments = useResource<Page<Assignment>>(
+  const assignments = useResource<Assignment[] | Page<Assignment>>(
     `/assignments/me?${new URLSearchParams({ cursor })}`,
   );
-  const assignment = assignments.data?.items.find((a) => a.id === id);
+  const assignmentItems = Array.isArray(assignments.data) ? assignments.data : assignments.data?.items;
+  const assignment = assignmentItems?.find((a) => a.id === id);
   const article = useResource<Article>(
-    assignment ? `/articles/${assignment.article_id}` : null,
+    assignment && ["ACTIVE", "RESERVED"].includes(assignment.effective_assignment_state || assignment.state) ? `/articles/${assignment.article_id}` : null,
   );
-  const versions = useResource<Page<Version>>(
-    assignment ? `/articles/${assignment.article_id}/versions` : null,
+  const versions = useResource<Version[] | Page<Version>>(
+    assignment && ["ACTIVE", "RESERVED"].includes(assignment.effective_assignment_state || assignment.state)
+      ? `/articles/${assignment.article_id}/versions` : null,
   );
   const [summary, setSummary] = useState("");
   const [comments, setComments] = useState<
@@ -41,15 +43,14 @@ export function ReviewWorkspace({ id }: { id: string }) {
   const key = useRef("");
   const payload = () => ({
     decision,
-    expected_article_version: article.data?.lock_version,
-    summary,
+    comments: summary,
     checklist: { format_valid: format, references_checked: references },
-    comments,
+    numbered_comments: comments.map(({ section_ref, text, required }) => ({ section_ref, text, required })),
+    required_changes_resolved: format && references,
   });
-  const live = assignment?.state === "ACTIVE";
+  const live = (assignment?.effective_assignment_state || assignment?.state) === "ACTIVE";
   const reload = async () => {
     await assignments.reload();
-    await article.reload();
   };
   return (
     <>
@@ -60,10 +61,10 @@ export function ReviewWorkspace({ id }: { id: string }) {
       {assignments.loading && <Loading />}
       {assignments.data && !assignment && (
         <Empty title="Assignment not on this page">
-          {assignments.data.next_cursor ? (
+          {(!Array.isArray(assignments.data) && assignments.data.next_cursor) ? (
             <button
               className="button secondary"
-              onClick={() => setCursor(assignments.data!.next_cursor!)}
+              onClick={() => setCursor((assignments.data as Page<Assignment>).next_cursor!)}
             >
               Search next assignments page →
             </button>
@@ -96,7 +97,7 @@ export function ReviewWorkspace({ id }: { id: string }) {
                 <h2>Manuscript & prior reviews</h2>
                 <p>{article.data?.abstract}</p>
                 <ErrorNotice error={versions.error} retry={versions.reload} />
-                {versions.data?.items.map((v) => (
+                {(Array.isArray(versions.data) ? versions.data : versions.data?.items)?.map((v) => (
                   <div className="feedback" key={v.id}>
                     <h3>Version {v.version_number}</h3>
                     {v.manuscript_file_id && (
@@ -121,29 +122,6 @@ export function ReviewWorkspace({ id }: { id: string }) {
                   </div>
                 ))}
               </section>
-              {assignment.state === "RESERVED" && (
-                <section className="panel">
-                  <h2>Your reserved revision is ready</h2>
-                  <p>Starting the review preserves the existing deadline.</p>
-                  <button
-                    className="button"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        await command(`/assignments/${id}/start`, {});
-                        await reload();
-                      } catch (e) {
-                        setError(e as Error);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    Start reserved review
-                  </button>
-                </section>
-              )}
               {live && (
                 <section className="panel">
                   <h2>A thoughtful, actionable review</h2>
@@ -156,6 +134,10 @@ export function ReviewWorkspace({ id }: { id: string }) {
                       try {
                         if (!confirm)
                           throw new Error("Confirm your final decision first.");
+                        if (decision === "REQUEST_REVISION" && comments.length === 0)
+                          throw new Error("Add at least one structured comment explaining the required changes.");
+                        if (decision === "APPROVE" && (!format || !references))
+                          throw new Error("Complete the review checklist before approving the article.");
                         key.current ||= crypto.randomUUID();
                         await command(
                           `/assignments/${id}/review`,
@@ -291,7 +273,7 @@ export function ReviewWorkspace({ id }: { id: string }) {
                         }}
                       >
                         <option value="REQUEST_REVISION">
-                          Request revision
+                          Reject — request changes
                         </option>
                         <option value="APPROVE">Approve manuscript</option>
                       </select>
@@ -317,10 +299,7 @@ export function ReviewWorkspace({ id }: { id: string }) {
                         onClick={async () => {
                           setBusy(true);
                           try {
-                            await api(`/assignments/${id}/review-draft`, {
-                              method: "PUT",
-                              body: JSON.stringify(payload()),
-                            });
+                            await command(`/assignments/${id}/review-draft`, payload(), undefined, "PUT");
                             setSaved("Feedback draft saved.");
                           } catch (e) {
                             setError(e as Error);

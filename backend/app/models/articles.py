@@ -42,7 +42,9 @@ class Article(Entity, Base):
     __tablename__ = "articles"
     tracking_number: Mapped[str] = mapped_column(unique=True)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
-    primary_subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("subjects.id"), index=True)
+    primary_subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("subjects.id"), index=True
+    )
     outlet_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("outlets.id"), index=True)
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("templates.id"))
     status: Mapped[str] = mapped_column(default="DRAFT")
@@ -55,8 +57,12 @@ class Article(Entity, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
         CheckConstraint(
-            "status IN ('DRAFT','SUBMITTED','IN_REVIEW','REVIEWED','APPROVED','PUBLISH')",
+            "status IN ('DRAFT','SUBMITTED','ASSIGNED','REJECTED','APPROVED','PAID','PAYMENT_APPROVED','PUBLISH','DELETED')",
             name="status",
+        ),
+        CheckConstraint(
+            "status IN ('DRAFT','DELETED') OR primary_subject_id IS NOT NULL",
+            name="submitted_subject",
         ),
         ForeignKeyConstraint(
             ["id", "current_version_id"],

@@ -129,17 +129,16 @@ def expire(db, article, assignment, now):
     return False
 
 
-def new_assignment(db, article, user, now, reserved=False):
-    _, settings = policy(db)
-    duration = settings["review_duration_hours"]
+def new_assignment(db, article, user, now):
+    duration = 120
     assignment = Assignment(
         article_id=article.id,
         round_id=article.current_round_id,
         version_id=article.current_version_id,
         reviewer_id=user.id,
-        state="RESERVED" if reserved else "ACTIVE",
+        state="ACTIVE",
         assigned_at=now,
-        started_at=None if reserved else now,
+        started_at=now,
         due_at=now + timedelta(hours=duration),
         duration_hours=duration,
     )
@@ -148,8 +147,8 @@ def new_assignment(db, article, user, now, reserved=False):
     transition(
         db,
         article,
-        "SUBMITTED" if reserved else "IN_REVIEW",
-        "RESERVED" if reserved else "CLAIMED",
+        "ASSIGNED",
+        "ASSIGNED",
         user,
     )
     emit(db, article.id, "ASSIGNED", [user.id, article.author_id], f"assigned:{assignment.id}")

@@ -8,12 +8,14 @@ import type { Invoice, PaymentAttempt, Page } from "@/types/api";
 export function Payment({
   articleId,
   admin = false,
+  onDone,
 }: {
   articleId: string;
   admin?: boolean;
+  onDone?: () => void;
 }) {
   const invoice = useResource<Invoice>(`/articles/${articleId}/invoice`);
-  const attempts = useResource<Page<PaymentAttempt>>(
+  const attempts = useResource<PaymentAttempt[] | Page<PaymentAttempt>>(
     invoice.data ? `/invoices/${invoice.data.id}/payment-attempts` : null,
   );
   const [proof, setProof] = useState("");
@@ -21,7 +23,8 @@ export function Payment({
   const [busy, setBusy] = useState(false);
   const key = useRef("");
   const i = invoice.data;
-  const pending = attempts.data?.items.some((a) => a.status === "SUBMITTED");
+  const attemptItems = Array.isArray(attempts.data) ? attempts.data : attempts.data?.items;
+  const pending = attemptItems?.some((a) => a.status === "SUBMITTED");
   return (
     <section className="panel">
       <h2>Publication payment</h2>
@@ -47,7 +50,7 @@ export function Payment({
             manuscript version. Proof submission does not verify payment or
             publish your article.
           </p>
-          {attempts.data?.items.map((attempt) => (
+          {attemptItems?.map((attempt) => (
             <div className="feedback" key={attempt.id}>
               <strong>
                 {attempt.status} · {attempt.reference}
@@ -65,6 +68,7 @@ export function Payment({
                   onDone={() => {
                     void attempts.reload();
                     void invoice.reload();
+                    onDone?.();
                   }}
                 />
               )}
@@ -87,14 +91,16 @@ export function Payment({
                     `/invoices/${i.id}/payment-attempts`,
                     {
                       reference: data.get("reference"),
-                      payment_date: data.get("payment_date"),
+                      paid_at: new Date(String(data.get("payment_date"))).toISOString(),
                       amount_minor: i.amount_minor,
                       currency: i.currency,
                       proof_file_id: proof,
                     },
                     key.current,
                   );
+                  key.current = "";
                   await attempts.reload();
+                  onDone?.();
                 } catch (e) {
                   setError(e as Error);
                 } finally {
@@ -161,7 +167,8 @@ export function PaymentDecision({
             `/admin/payment-attempts/${attempt.id}/${decision}`,
             decision === "verify"
               ? {
-                  verified_reference: data.get("reference"),
+                  reference: data.get("reference"),
+                  receipt_confirmed: confirmed,
                   receipt_note: data.get("reason"),
                 }
               : { reason: data.get("reason") },

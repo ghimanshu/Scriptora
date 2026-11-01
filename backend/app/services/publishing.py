@@ -19,7 +19,7 @@ def publish(db, article_id, user, data):
     if user.id == article.author_id:
         fail("SELF_PUBLICATION_FORBIDDEN", 403)
     if (
-        article.status != "APPROVED"
+        article.status != "PAYMENT_APPROVED"
         or not invoice
         or invoice.status != "PAID"
         or data.approved_version_id != article.approved_version_id

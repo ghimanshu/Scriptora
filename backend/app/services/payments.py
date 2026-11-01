@@ -5,6 +5,7 @@ from app.core.errors import fail
 from app.db.session import db_now
 from app.models.payments import Invoice, PaymentAttempt
 from app.repositories.articles import locked_article
+from app.services.assignments import transition
 from app.services.notifications import admins, audit, emit
 from app.services.workflow import clean_file, owner
 
@@ -54,6 +55,7 @@ def submit_payment(db, invoice_id, user, data):
     )
     db.add(attempt)
     db.flush()
+    transition(db, article, "PAID", "PAYMENT_SUBMITTED", user)
     emit(db, article.id, "PAYMENT_SUBMITTED", admins(db), f"payment:{attempt.id}")
     return attempt
 
@@ -64,7 +66,7 @@ def verify(db, attempt_id, user, data):
     if user.id in (article.author_id, attempt.submitted_by):
         fail("SELF_VERIFICATION_FORBIDDEN", 403)
     if (
-        article.status != "APPROVED"
+        article.status != "PAID"
         or invoice.status != "OPEN"
         or attempt.status != "SUBMITTED"
         or attempt.amount_minor != invoice.amount_minor
@@ -76,6 +78,7 @@ def verify(db, attempt_id, user, data):
     attempt.status, attempt.verified_by, attempt.verified_at = "VERIFIED", user.id, db_now(db)
     attempt.receipt_note = data.receipt_note
     invoice.status = "PAID"
+    transition(db, article, "PAYMENT_APPROVED", "PAYMENT_APPROVED", user)
     db.flush()
     audit(db, user, "VERIFY_PAYMENT", attempt)
     emit(db, article.id, "PAYMENT_VERIFIED", [article.author_id], f"verified:{attempt.id}")
@@ -87,9 +90,10 @@ def reject(db, attempt_id, user, reason):
     article, invoice, attempt = payment_locks(db, attempt_id)
     if user.id == article.author_id:
         fail("SELF_VERIFICATION_FORBIDDEN", 403)
-    if attempt.status != "SUBMITTED" or invoice.status != "OPEN":
+    if article.status != "PAID" or attempt.status != "SUBMITTED" or invoice.status != "OPEN":
         fail("PAYMENT_ALREADY_DECIDED")
     attempt.status, attempt.rejection_reason = "REJECTED", reason
+    transition(db, article, "APPROVED", "PAYMENT_REJECTED", user)
     audit(db, user, "REJECT_PAYMENT", attempt)
     emit(db, article.id, "PAYMENT_REJECTED", [article.author_id], f"rejected:{attempt.id}")
     return attempt

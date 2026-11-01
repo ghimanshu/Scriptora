@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import { Brand } from "@/components/common/shell";
 import { ErrorNotice } from "@/components/common/data";
 import type { User } from "@/types/api";
@@ -16,6 +16,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [error, setError] = useState<Error>();
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState("");
+  const [registrationRole, setRegistrationRole] = useState("AUTHOR");
   const router = useRouter();
   const titles = {
     login: "Welcome back.",
@@ -44,7 +45,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           {mode === "login"
             ? "Sign in to your publishing workspace."
             : mode === "register"
-              ? "Create an author account to start your publishing journey."
+              ? "Create an author account or apply to become a reviewer. Reviewer accounts require admin approval."
               : "Follow the instructions sent to your email address."}
         </p>
         <ErrorNotice error={error} />
@@ -73,20 +74,39 @@ export function AuthForm({ mode }: { mode: Mode }) {
                 } else
                   setSuccess(
                     mode === "register"
-                      ? "Account created. Check your email to verify your address before signing in."
+                      ? payload.role === "REVIEWER"
+                        ? "Reviewer application submitted for admin review. You will receive an email when an admin approves or rejects your application."
+                        : "Account created. Check your email to verify your address before signing in."
                       : mode === "forgot-password"
                         ? "If that address has an account, a password reset link is on its way."
                         : mode === "verify-email"
-                          ? "Email verified. You can now sign in."
+                          ? "Email verified. You can sign in if your account has been approved."
                           : "Password updated. Sign in with your new password.",
                   );
               } catch (e) {
-                setError(e as Error);
+                setError(
+                  e instanceof ApiError && e.code === "REVIEWER_APPROVAL_PENDING"
+                    ? new Error("Your reviewer application is awaiting admin approval. You can sign in once it is approved.")
+                    : e instanceof ApiError && e.code === "REVIEWER_APPLICATION_REJECTED"
+                      ? new Error("Your reviewer application was rejected. Check your email for the decision and reason.")
+                      : e instanceof ApiError && e.code === "EMAIL_VERIFICATION_REQUIRED"
+                        ? new Error("Verify your email using the link sent to your address before signing in.")
+                        : e as Error,
+                );
               } finally {
                 setBusy(false);
               }
             }}
           >
+            {mode === "register" && (
+              <label>
+                Register as
+                <select name="role" value={registrationRole} onChange={(e) => setRegistrationRole(e.target.value)}>
+                  <option value="AUTHOR">Author</option>
+                  <option value="REVIEWER">Reviewer (admin approval required)</option>
+                </select>
+              </label>
+            )}
             {mode === "register" && (
               <label>
                 Full name
@@ -159,7 +179,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
                 : mode === "login"
                   ? "Sign in →"
                   : mode === "register"
-                    ? "Create author account →"
+                    ? registrationRole === "REVIEWER" ? "Apply as reviewer →" : "Create author account →"
                     : mode === "forgot-password"
                       ? "Send reset instructions"
                       : "Confirm"}

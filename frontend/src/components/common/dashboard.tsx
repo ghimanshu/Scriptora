@@ -20,15 +20,15 @@ export function Dashboard({
       : area === "reviewer"
         ? "/assignments/me"
         : "/articles";
-  const resource = useResource<Page<Article & Assignment>>(path);
+  const resource = useResource<Page<Article & Assignment> | (Article & Assignment)[]>(path);
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
-  const more = useResource<Page<Article & Assignment>>(
+  const more = useResource<Page<Article & Assignment> | (Article & Assignment)[]>(
     cursor ? `${path}?cursor=${encodeURIComponent(cursor)}` : null,
   );
   const page = cursor ? more : resource;
-  const items = page.data?.items || [];
+  const items = Array.isArray(page.data) ? page.data : page.data?.items || [];
   const title =
     area === "author"
       ? list
@@ -88,12 +88,12 @@ export function Dashboard({
                   ["Assignments on this page", items.length, "article"],
                   [
                     "Active reviews",
-                    items.filter((a) => a.state === "ACTIVE").length,
+                    items.filter((a) => (a.effective_assignment_state || a.state) === "ACTIVE").length,
                     "clock",
                   ],
                   [
-                    "Reserved revisions",
-                    items.filter((a) => a.state === "RESERVED").length,
+                    "Expired reviews",
+                    items.filter((a) => (a.effective_assignment_state || a.state) === "EXPIRED").length,
                     "book",
                   ],
                   [
@@ -106,12 +106,12 @@ export function Dashboard({
                   ["Articles on this page", items.length, "article"],
                   [
                     "In review",
-                    items.filter((a) => a.status === "IN_REVIEW").length,
+                    items.filter((a) => a.status === "ASSIGNED").length,
                     "clock",
                   ],
                   [
                     "Changes requested",
-                    items.filter((a) => a.status === "REVIEWED").length,
+                    items.filter((a) => a.status === "REJECTED").length,
                     "book",
                   ],
                   [
@@ -194,9 +194,13 @@ export function Dashboard({
             <div className="tabs" role="group" aria-label="Filter articles">
               {[
                 ["ALL", "All articles"],
-                ["DRAFT", "Drafts"],
-                ["IN_REVIEW", "In review"],
-                ["REVIEWED", "Needs attention"],
+                ...(area === "author" ? [["DRAFT", "Drafts"]] : []),
+                ["SUBMITTED", "Awaiting assignment"],
+                ["ASSIGNED", "Assigned"],
+                ["REJECTED", "Changes requested"],
+                ["APPROVED", "Approved"],
+                ["PAID", "Payment pending"],
+                ["PAYMENT_APPROVED", "Payment approved"],
                 ["PUBLISH", "Published"],
               ].map(([value, label]) => (
                 <button
@@ -276,10 +280,10 @@ export function Dashboard({
                   First page
                 </button>
               )}
-              {page.data.next_cursor && (
+              {(!Array.isArray(page.data) && page.data.next_cursor) && (
                 <button
                   className="button secondary small"
-                  onClick={() => setCursor(page.data!.next_cursor!)}
+                  onClick={() => setCursor((page.data as Page<Article & Assignment>).next_cursor!)}
                 >
                   Next page →
                 </button>

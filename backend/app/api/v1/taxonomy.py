@@ -1,17 +1,58 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.api.deps import admin, database
 from app.api.idempotency import IdempotentRoute
+from app.api.pagination import page
 from app.api.serialization import record
 from app.core.errors import fail
 from app.models.taxonomy import Issue, Outlet, PublicationType, Subject, Template
 from app.services.notifications import audit
 
 router = APIRouter(prefix="/admin", route_class=IdempotentRoute)
+
+
+@router.get("/subjects")
+def list_subjects(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    user=Depends(admin),
+    db=Depends(database),
+):
+    return page(db, Subject, select(Subject), limit, cursor)
+
+
+@router.get("/outlets")
+def list_outlets(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    user=Depends(admin),
+    db=Depends(database),
+):
+    return page(db, Outlet, select(Outlet), limit, cursor)
+
+
+@router.get("/templates")
+def list_templates(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    user=Depends(admin),
+    db=Depends(database),
+):
+    return page(db, Template, select(Template), limit, cursor)
+
+
+@router.get("/issues")
+def list_issues(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    user=Depends(admin),
+    db=Depends(database),
+):
+    return page(db, Issue, select(Issue), limit, cursor)
 
 
 class SubjectInput(BaseModel):

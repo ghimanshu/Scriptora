@@ -55,6 +55,7 @@ export function Shell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
+        <div className="sidebar-scroll">
         <Brand />
         <div className="workspace-label">PUBLISHING WORKSPACE</div>
         <nav aria-label="Workspace navigation">
@@ -86,6 +87,9 @@ export function Shell({
             <Icon name="bell" />
             Notifications
           </Link>
+        </div>
+        </div>
+        <div className="sidebar-footer">
           <div className="user-card">
             <span className="avatar">
               {user?.name?.slice(0, 2).toUpperCase() || "SC"}
@@ -94,10 +98,10 @@ export function Shell({
               <strong>{user?.name || "Your workspace"}</strong>
               <small>{area.charAt(0).toUpperCase() + area.slice(1)}</small>
             </div>
+          </div>
             <button
-              title="Sign out"
-              aria-label="Sign out"
-              className="icon-button"
+              type="button"
+              className="sidebar-logout"
               onClick={async () => {
                 try {
                   await api("/auth/logout", { method: "POST" });
@@ -108,8 +112,8 @@ export function Shell({
               }}
             >
               <Icon name="exit" size={17} />
+              Log out
             </button>
-          </div>
         </div>
       </aside>
       <div className="main-shell">

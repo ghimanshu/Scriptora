@@ -38,7 +38,7 @@ def save_review(db, assignment_id, user, data, final=True):
         review.submitted_at = now
         assignment.state, assignment.completed_at = "COMPLETED", now
         accepted = data.decision == "APPROVE"
-        transition(db, article, "APPROVED" if accepted else "REVIEWED", data.decision, user)
+        transition(db, article, "APPROVED" if accepted else "REJECTED", data.decision, user)
         if accepted:
             version, settings = policy(db)
             if not settings.get("payment_instructions"):
@@ -55,5 +55,29 @@ def save_review(db, assignment_id, user, data, final=True):
                     instructions=settings["payment_instructions"],
                 )
             )
-        emit(db, article.id, data.decision, [article.author_id], f"review:{review.id}")
+        emit(
+            db,
+            article.id,
+            "ARTICLE_APPROVED" if accepted else "ARTICLE_REJECTED",
+            [article.author_id],
+            f"review:{review.id}",
+            {
+                "title": "Article approved" if accepted else "Article changes requested",
+                "message": (
+                    "Your article is approved. Pay the publication fee and upload payment proof."
+                    if accepted
+                    else "Your article requires changes. Read the feedback, revise, and resubmit."
+                ),
+                "path": f"/author/articles/{article.id}",
+                **(
+                    {
+                        "amount_minor": settings["publication_fee_minor"],
+                        "currency": "INR",
+                        "payment_instructions": settings["payment_instructions"],
+                    }
+                    if accepted
+                    else {}
+                ),
+            },
+        )
     return review

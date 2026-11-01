@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useResource, ErrorNotice } from "@/components/common/data";
-import { api } from "@/lib/api-client";
+import { command } from "@/lib/api-client";
 import type { Taxon } from "@/types/api";
 export function ReviewerProfile() {
   const all = useResource<Taxon[]>("/subjects");
@@ -39,13 +39,15 @@ export function ReviewerProfile() {
               e.preventDefault();
               const data = new FormData(e.currentTarget);
               setBusy(true);
+              setError(undefined);
+              setSaved("");
               try {
-                await api("/reviewers/me/subjects", {
-                  method: "PUT",
-                  body: JSON.stringify({
-                    subject_ids: data.getAll("subjects"),
-                  }),
-                });
+                await command(
+                  "/reviewers/me/subjects",
+                  { subject_ids: data.getAll("subjects") },
+                  undefined,
+                  "PUT",
+                );
                 setSaved("Expertise subscriptions updated.");
                 await mine.reload();
               } catch (e) {
@@ -80,11 +82,15 @@ export function ReviewerProfile() {
             const available =
               new FormData(e.currentTarget).get("available") === "true";
             setBusy(true);
+            setError(undefined);
+            setSaved("");
             try {
-              await api("/reviewers/me/availability", {
-                method: "PATCH",
-                body: JSON.stringify({ available }),
-              });
+              await command(
+                "/reviewers/me/availability",
+                { available },
+                undefined,
+                "PATCH",
+              );
               setSaved(
                 "Availability updated. Existing assignments retain their deadlines.",
               );

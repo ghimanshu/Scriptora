@@ -23,10 +23,77 @@ test("public entry points and author registration", async ({ page }) => {
   await page.getByRole("button", { name: /Create author account/ }).click();
   await expect(page.getByRole("status")).toContainText("Account created.");
   expect(registrationPayload).toEqual({
+    role: "AUTHOR",
     display_name: "Test Author",
     email: "author@example.com",
     password: "a sufficiently long test password",
   });
+});
+
+test("reviewer registration submits an application requiring admin approval", async ({ page }) => {
+  let payload: unknown;
+  await page.route("**/api/v1/auth/register", async (route) => {
+    payload = route.request().postDataJSON();
+    await route.fulfill({ status: 201, json: { message: "Verification pending" } });
+  });
+  await page.goto("/register");
+  await page.getByLabel("Register as").selectOption("REVIEWER");
+  await page.getByLabel("Full name").fill("Test Reviewer");
+  await page.getByLabel("Email address").fill("reviewer@example.com");
+  await page.getByLabel("Password").fill("a sufficiently long test password");
+  await page.getByRole("button", { name: /Apply as reviewer/ }).click();
+  await expect(page.getByRole("status")).toContainText("an admin approves or rejects your application");
+  expect(payload).toEqual({ role: "REVIEWER", display_name: "Test Reviewer", email: "reviewer@example.com", password: "a sufficiently long test password" });
+});
+
+test("pending reviewers see approval instructions when signing in", async ({ page }) => {
+  await page.route("**/api/v1/auth/login", (route) => route.fulfill({
+    status: 403, json: { error: { code: "REVIEWER_APPROVAL_PENDING" } },
+  }));
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill("reviewer@example.com");
+  await page.getByLabel("Password", { exact: true }).fill("a sufficiently long test password");
+  await page.getByRole("button", { name: /Sign in/ }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "awaiting admin approval" })).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("admin approves an unverified reviewer application", async ({ page }) => {
+  const reviewer = { id: "reviewer", name: "Test Reviewer", email: "reviewer@example.com", email_verified: false, active: true };
+  let approved = false;
+  await page.route("**/api/v1/me", (route) => route.fulfill({ json: { id: "admin", name: "Admin", roles: ["ADMIN"] } }));
+  await page.route("**/api/v1/admin/users?*", (route) => route.fulfill({ json: { items: [{ ...reviewer, roles: ["REVIEWER"] }] } }));
+  await page.route("**/api/v1/admin/reviewers", (route) => route.fulfill({ json: { items: approved ? [] : [reviewer] } }));
+  await page.route("**/api/v1/admin/reviewers/reviewer/approve", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ reason: "Qualifications verified" });
+    approved = true;
+    await route.fulfill({ json: { approved: true } });
+  });
+  page.on("dialog", (dialog) => dialog.accept("Qualifications verified"));
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Reviewer approval recorded" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  expect(approved).toBe(true);
+});
+
+test("admin rejects a reviewer application and it leaves the queue", async ({ page }) => {
+  const reviewer = { id: "reviewer", name: "Test Reviewer", email: "reviewer@example.com", email_verified: false, active: true };
+  let rejected = false;
+  await page.route("**/api/v1/me", (route) => route.fulfill({ json: { id: "admin", name: "Admin", roles: ["ADMIN"] } }));
+  await page.route("**/api/v1/admin/users?*", (route) => route.fulfill({ json: { items: [] } }));
+  await page.route("**/api/v1/admin/reviewers", (route) => route.fulfill({ json: { items: rejected ? [] : [reviewer] } }));
+  await page.route("**/api/v1/admin/reviewers/reviewer/reject", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ reason: "Insufficient relevant experience" });
+    rejected = true;
+    await route.fulfill({ json: { approved: false, rejected: true } });
+  });
+  page.on("dialog", (dialog) => dialog.accept("Insufficient relevant experience"));
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Decision email queued" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reject", exact: true })).toHaveCount(0);
+  expect(rejected).toBe(true);
 });
 test("author dashboard handles empty data, navigation, and small screens", async ({
   page,

@@ -27,7 +27,7 @@ def ready(db=Depends(database)):
     try:
         db.execute(text("SELECT 1"))
         revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        if revision != "0005_outbox_audit":
+        if revision != "0009_draft_subjects":
             fail("SCHEMA_NOT_READY", 503)
         from app.core.config import get_settings
         from app.integrations.scanner import scan

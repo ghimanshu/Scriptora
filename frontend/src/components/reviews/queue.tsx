@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { command } from "@/lib/api-client";
 import {
@@ -81,12 +82,13 @@ export function ReviewQueue() {
               </div>
               <h3>{a.title}</h3>
               <p>{a.abstract}</p>
+              <Link className="file-link" href={`/reviewer/articles/${a.id}`}>View manuscript</Link>
               {confirm === a.id ? (
                 <div className="confirm-box">
                   <p>
                     By claiming, you confirm that you are eligible and have no
                     author, coauthor, or other conflict. The backend sets your
-                    exact review deadline.
+                    five-day review deadline.
                   </p>
                   <div className="actions">
                     <button

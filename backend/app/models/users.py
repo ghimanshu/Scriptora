@@ -28,6 +28,7 @@ class ReviewerProfile(Base):
     __tablename__ = "reviewer_profiles"
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
     approved: Mapped[bool] = mapped_column(default=False)
+    rejected: Mapped[bool] = mapped_column(default=False, server_default="false")
     available: Mapped[bool] = mapped_column(default=True)
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
 

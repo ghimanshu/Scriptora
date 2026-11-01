@@ -74,7 +74,11 @@ export function ArticleTable({
                   href={`/${area}/articles/${article.id}`}
                   aria-label={`Open ${article.title}`}
                 >
-                  ↗
+                  {area === "author" && article.status === "DRAFT"
+                    ? "Edit draft"
+                    : area === "author" && article.status === "REJECTED"
+                      ? "Revise article"
+                      : "↗"}
                 </Link>
               </td>
             </tr>

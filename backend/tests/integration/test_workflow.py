@@ -25,7 +25,12 @@ def setup_article(db):
     outlet = db.scalar(select(Outlet))
     template = db.scalar(select(Template).where(Template.outlet_id == outlet.id))
     policy = db.scalar(select(SettingsVersion))
-    policy.values = {**policy.values, "payment_instructions": "Test bank account only"}
+    policy.values = {
+        **policy.values,
+        "publication_fee_minor": 250000,
+        "review_duration_hours": 120,
+        "payment_instructions": "Test bank account only",
+    }
     author = User(
         email="author@example.com",
         display_name="Author",
@@ -82,7 +87,7 @@ def setup_article(db):
 def test_migration_revision_and_constraints(pg):
     assert (
         pg.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        == "0005_outbox_audit"
+        == "0009_draft_subjects"
     )
     indexes = set(pg.scalars(text("SELECT indexname FROM pg_indexes WHERE schemaname='public'")))
     assert {
@@ -158,3 +163,47 @@ def test_approval_issues_single_snapshot_invoice(pg):
     except HTTPException:
         pg.rollback()
     assert len(list(pg.scalars(select(Invoice)))) == 1
+
+
+def test_author_edit_actions_and_submission_lock(pg, pg_engine, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.core.security import issue_session
+    from app.db import session
+    from app.main import app
+
+    article, _ = setup_article(pg)
+    author = pg.get(User, article.author_id)
+    tokens = issue_session(pg, author)
+    pg.commit()
+    monkeypatch.setattr(session, "engine", lambda: pg_engine)
+    headers = {
+        "Authorization": "Bearer " + tokens["access_token"],
+        "If-Match": str(article.lock_version),
+        "Idempotency-Key": "locked-edit",
+    }
+    with TestClient(app) as client:
+        url = f"/api/v1/articles/{article.id}"
+        response = client.get(url, headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["allowed_actions"] == []
+        assert response.json()["title"] == "Test article"
+        response = client.patch(url, headers=headers, json={"metadata": {"title": "Blocked edit"}})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "DRAFT_REQUIRED"
+        article.status = "DRAFT"
+        version = pg.get(ArticleVersion, article.current_version_id)
+        version.submitted_at = None
+        pg.commit()
+        assert client.get(url, headers=headers).json()["allowed_actions"] == ["EDIT", "SUBMIT"]
+        headers["Idempotency-Key"] = "draft-edit"
+        response = client.patch(
+            url,
+            headers=headers,
+            json={"metadata": {"title": "Updated draft", "abstract": "Updated abstract"}},
+        )
+        assert response.status_code == 200, response.text
+        detail = client.get(url, headers=headers).json()
+        assert detail["title"] == "Updated draft"
+        assert detail["abstract"] == "Updated abstract"
+        assert detail["lock_version"] == article.lock_version + 1

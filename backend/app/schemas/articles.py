@@ -19,7 +19,8 @@ class Manuscript(BaseModel):
 
 
 class Draft(BaseModel):
-    primary_subject_id: UUID
+    publication_type_id: UUID | None = None
+    primary_subject_id: UUID | None = None
     outlet_id: UUID
     template_id: UUID
     metadata: Manuscript
@@ -29,6 +30,13 @@ class Draft(BaseModel):
 class VersionInput(BaseModel):
     metadata: Manuscript
     manuscript_file_id: UUID | None = None
+
+
+class DraftUpdate(VersionInput):
+    publication_type_id: UUID | None = None
+    primary_subject_id: UUID | None = None
+    outlet_id: UUID | None = None
+    template_id: UUID | None = None
 
 
 class Expected(BaseModel):

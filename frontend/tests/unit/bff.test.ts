@@ -12,6 +12,11 @@ afterEach(() => {
 describe("BFF trust boundaries", () => {
   it("allows documented commands and rejects arbitrary destinations and generic status updates", () => {
     expect(allowed("POST", `articles/${id}/claim`)).toBe(true);
+    expect(allowed("POST", `admin/reviewers/${id}/approve`)).toBe(true);
+    expect(allowed("POST", `admin/reviewers/${id}/reject`)).toBe(true);
+    expect(allowed("GET", `admin/articles/${id}/reviewers`)).toBe(true);
+    expect(allowed("POST", `admin/articles/${id}/assign`)).toBe(true);
+    expect(allowed("POST", "admin/reviewers/invalid/reject")).toBe(false);
     for (const path of [
       "https://evil.test",
       "../auth/login",
@@ -23,6 +28,9 @@ describe("BFF trust boundaries", () => {
       expect(allowed("POST", path)).toBe(false);
     expect(allowed("GET", `files/${id}/download`)).toBe(true);
     expect(allowed("DELETE", `articles/${id}`)).toBe(false);
+    expect(allowed("DELETE", `admin/articles/${id}`)).toBe(true);
+    expect(allowed("DELETE", "admin/articles/invalid")).toBe(false);
+    expect(publicPath(`admin/articles/${id}`)).toBe(false);
     expect(publicPath(`articles/${id}`)).toBe(false);
   });
   it("binds CSRF to the refresh session and exact browser origin", () => {
@@ -87,6 +95,25 @@ describe("BFF trust boundaries", () => {
     expect(data.error.code).toBe("ASSIGNMENT_EXPIRED");
     expect(data.error.request_id).toBe("trace-123");
     expect(JSON.stringify(data)).not.toContain("password");
+  });
+  it("explains unreadable manuscript text without exposing backend messages", async () => {
+    const response = await safeResponse(new Response(JSON.stringify({ detail: {
+      code: "MANUSCRIPT_TEXT_UNREADABLE", message: "private storage path",
+    } }), { status: 422 }), "trace");
+    const body = await response.json();
+    expect(body.error.message).toContain("text-based PDF or DOCX");
+    expect(JSON.stringify(body)).not.toContain("private storage");
+  });
+  it("shows validated manuscript word counts and rejects unsafe details", async () => {
+    for (const count of [42, "private storage path", -1, null]) {
+      const response = await safeResponse(new Response(JSON.stringify({ detail: {
+        code: "WORD_COUNT_OUTSIDE_TEMPLATE", details: { word_count: count, min_words: 100, max_words: 20000 },
+      } }), { status: 422 }), "trace");
+      const body = await response.json();
+      if (count === 42) expect(body.error.message).toContain("42 words. This template requires 100?20000 words");
+      else expect(body.error.message).toContain("outside the template limits");
+      expect(JSON.stringify(body)).not.toContain("private storage");
+    }
   });
   it("does not relay backend redirects", async () => {
     const response = await safeResponse(

@@ -66,15 +66,14 @@ export function SubmissionWizard() {
         conflict: fields.conflicts,
       },
     };
-    const payload = draft
-      ? { metadata, manuscript_file_id: fileId || null }
-      : {
-          primary_subject_id: fields.primary_subject_id,
-          outlet_id: fields.outlet_id,
-          template_id: templateId,
-          metadata,
-          manuscript_file_id: fileId || null,
-        };
+    const payload = {
+      publication_type_id: fields.publication_type_id,
+      primary_subject_id: fields.primary_subject_id || null,
+      outlet_id: fields.outlet_id,
+      template_id: templateId,
+      metadata,
+      manuscript_file_id: fileId || null,
+    };
     const path = draft ? `/articles/${draft.id}` : "/articles";
     const method = draft ? "PATCH" : "POST";
     const body = JSON.stringify(payload);
@@ -169,19 +168,18 @@ export function SubmissionWizard() {
             <fieldset className="form-section">
               <legend>Find the right home for your work</legend>
               <p>
-                Select your publication and subject. These determine the
-                submission template and reviewer expertise.
+                Select your publication type and outlet. These determine the
+                submission template. Choose the subject on the next step.
               </p>
               <div className="form-grid">
                 {[
                   ["publication_type_id", "Publication type", types.data],
                   ["outlet_id", "Publication outlet", outlets.data?.filter((outlet) => outlet.type_id === fields.publication_type_id)],
-                  ["primary_subject_id", "Primary subject", subjects.data],
                 ].map(([key, label, data]) => (
                   <label key={String(key)}>
                     {String(label)}
                     <select
-                      disabled={Boolean(draft)}
+                      disabled={busy}
                       required
                       value={String(fields[key as keyof typeof fields])}
                       onChange={(e) => {
@@ -213,6 +211,20 @@ export function SubmissionWizard() {
             <fieldset className="form-section">
               <legend>Give your manuscript a clear introduction</legend>
               <div className="form-grid">
+                <label className="full">
+                  Primary subject
+                  <select
+                    required
+                    value={fields.primary_subject_id}
+                    disabled={busy || subjects.loading}
+                    onChange={(event) => update("primary_subject_id", event.target.value)}
+                  >
+                    <option value="">Choose a subject</option>
+                    {subjects.data?.map((subject) => (
+                      <option key={subject.id} value={subject.id}>{subject.name}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="full">
                   Article title
                   <input
@@ -368,6 +380,7 @@ export function SubmissionWizard() {
                 and file scan before accepting it.
               </p>
               <h2>{fields.title}</h2>
+              <p>Subject: {subjects.data?.find((subject) => subject.id === fields.primary_subject_id)?.name}</p>
               <p>{fields.abstract}</p>
               <p>
                 {fields.author_name}

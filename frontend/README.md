@@ -1,6 +1,68 @@
 # Publishing frontend — implementation setup specification
 
-This directory contains setup/configuration templates, not a runnable Next.js implementation. Build the source tree defined in ../Application_Design.md before running the application commands below.
+This directory contains the Next.js frontend for the publishing application. It provides author, reviewer, and admin workspaces and proxies browser API requests to the separate backend.
+
+## Article workflow
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Author saves initial information
+    DRAFT --> SUBMITTED: Author submits for review
+    SUBMITTED --> ASSIGNED: Admin assigns or eligible reviewer claims
+    ASSIGNED --> REJECTED: Reviewer requests changes
+    REJECTED --> ASSIGNED: Author resubmits to the previous reviewer
+    REJECTED --> SUBMITTED: Previous reviewer unavailable
+    ASSIGNED --> APPROVED: Reviewer accepts
+    ASSIGNED --> SUBMITTED: Assignment expires or is released
+    APPROVED --> PAID: Author submits payment proof
+    PAID --> APPROVED: Admin rejects payment proof
+    PAID --> PAYMENT_APPROVED: Admin verifies receipt
+    PAYMENT_APPROVED --> PUBLISH: Admin publishes approved PDF
+```
+
+| Article status | Visibility and permitted actions |
+| --- | --- |
+| `DRAFT` | Only the author can view the article, its versions, activity, and files. The author can edit and save repeatedly. Admin article lists exclude drafts. |
+| `SUBMITTED` | The author can track the article but cannot edit it. Admins and eligible reviewers of the same subject can view it. An admin can assign an eligible reviewer, or an eligible reviewer can claim it. |
+| `ASSIGNED` | One reviewer holds the assignment. The author cannot edit the article, and admins cannot replace the assigned reviewer. The assigned reviewer can submit feedback or approve the article within five days. |
+| `REJECTED` | This means changes requested, rather than permanent rejection. Only the author can revise the manuscript, respond to feedback, and resubmit a new version. Earlier submitted versions remain immutable. |
+| `APPROVED` | The manuscript is locked. The author receives an approval email with the publication fee, payment instructions, and article link. The author pays and uploads proof. |
+| `PAID` | Payment proof has been submitted and is awaiting admin verification. This status does not confirm receipt of funds or publish the article. |
+| `PAYMENT_APPROVED` | An admin has verified the actual bank receipt, amount, and reference. The article is ready for a separate publication action. The UI displays this as “Payment approved.” |
+| `PUBLISH` | The admin has published the approved PDF. The publication is available in the public library. |
+
+### Saving a draft
+
+The first tab saves the selected publication type, outlet, and submission template as a private `DRAFT`. Subject is selected on the second tab alongside the manuscript information. Saving that tab persists the subject as well as the title, abstract, keywords, authors, and declarations collected so far.
+
+Draft saves send classification fields on both creation and updates. Returning to the first tab allows publication selections to be changed while the article is still a draft. Reopening the saved draft also lets its author select or change the primary subject. A draft may temporarily have no subject, but submission for review requires an active subject.
+
+### Reviewer assignment and deadlines
+
+- Admins assign from the eligible reviewer selector in the article workspace. Reviewers can inspect and claim available manuscripts through the review queue.
+- Eligibility requires an active, email-verified, approved reviewer with matching subject expertise, available capacity, and no author, coauthor, or declared conflict of interest.
+- Both assignment paths require an unassigned `SUBMITTED` article. The backend uses locks and a unique live-assignment constraint to prevent concurrent claims or replacement of an existing assignment.
+- The review deadline is fixed at **120 hours (five days) from assignment** and cannot be extended. Late review submissions are rejected even if the expiry worker is stopped.
+- The expiry worker returns overdue assignments to `SUBMITTED`. Released or revoked assignments also return to the queue.
+- Resubmission automatically assigns the previous reviewer a new five-day review when they remain eligible, available, and within capacity. If they cannot take it, the article returns to the unassigned queue and admins are notified.
+
+### Review and revision
+
+The reviewer submits either approval or a request for changes. Change requests must include structured comments. The author can edit again only after the article reaches `REJECTED`, must address required comments, and can upload a replacement manuscript or retain the existing document. Resubmission creates a new immutable version and review round, then assigns the previous reviewer a fresh five-day deadline by default.
+
+### Payment and publication
+
+Approval creates an invoice that snapshots the fee and payment instructions for the approved manuscript version. Admins configure fees and bank instructions under **Settings & templates → Workflow settings**; later changes do not alter existing invoices.
+
+The author uploads payment proof and supplies the transaction reference and payment date. An admin checks the actual bank receipt before approving it. Rejected proof returns the article to `APPROVED`, allowing corrected proof to be submitted. Authors cannot verify their own payments, even if they also have an admin role.
+
+Payment approval does not automatically publish an article. Publication is a separate admin action that requires verified payment and the same approved final PDF. Published metadata and files become public; private reviews and payment proofs do not.
+
+### Backend requirements
+
+The backend enforces every transition and permission; frontend controls reflect those rules. Apply backend migrations through `0009_draft_subjects` before using this workflow, then restart the API and worker. The worker processes notifications, email deliveries, and assignment expiry; SMTP must be configured for email delivery. See the [backend README](../backend/README.md) for setup and migration instructions.
+
+Migration `0008_article_workflow` maps legacy `IN_REVIEW` to `ASSIGNED` and `REVIEWED` to `REJECTED`, derives payment states from existing records, and aligns active assignment deadlines with the fixed five-day policy.
 
 ## Target stack and prerequisites
 

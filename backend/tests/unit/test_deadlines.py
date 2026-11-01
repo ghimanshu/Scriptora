@@ -12,7 +12,7 @@ from app.services import assignments
 @pytest.mark.parametrize("offset,expires", [(-1, False), (0, True), (1, True)])
 def test_deadline_boundary_and_expiry_deduplication(monkeypatch, offset, expires):
     due = datetime(2026, 10, 31, tzinfo=timezone.utc)
-    article = SimpleNamespace(id="article", status="IN_REVIEW", lock_version=4)
+    article = SimpleNamespace(id="article", status="ASSIGNED", lock_version=4)
     assignment = SimpleNamespace(
         id="assignment", state="ACTIVE", due_at=due, reviewer_id="reviewer"
     )

@@ -109,6 +109,9 @@ def word_count(file):
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 xml = fromstring(archive.read("word/document.xml"))
                 text = " ".join(n.text or "" for n in xml.iter() if n.tag.endswith("}t"))
-        return len(text.split())
+        count = len(text.split())
     except Exception:
         fail("MANUSCRIPT_TEXT_UNREADABLE", 422)
+    if count == 0:
+        fail("MANUSCRIPT_TEXT_UNREADABLE", 422)
+    return count

@@ -7,10 +7,7 @@ import { PaymentDecision } from "@/components/payments/payment";
 import { money, date } from "@/lib/formatting";
 import type { Page, PaymentAttempt, User, Taxon } from "@/types/api";
 export function AdminPayments() {
-  const [cursor, setCursor] = useState("");
-  const result = useResource<Page<PaymentAttempt>>(
-    `/admin/payments?${new URLSearchParams({ cursor })}`,
-  );
+  const result = useResource<PaymentAttempt[]>("/admin/payments");
   return (
     <>
       <div className="page-heading">
@@ -26,14 +23,14 @@ export function AdminPayments() {
       <ErrorNotice error={result.error} retry={result.reload} />
       {result.loading ? (
         <Loading />
-      ) : result.data?.items.length === 0 ? (
+      ) : result.data?.length === 0 ? (
         <section className="panel">
           <Empty title="All caught up">
             Payment proofs awaiting verification will appear here.
           </Empty>
         </section>
       ) : (
-        result.data?.items.map((attempt) => (
+        result.data?.map((attempt) => (
           <section className="panel form-panel" key={attempt.id}>
             <div className="panel-heading">
               <h2>{money(attempt.amount_minor, attempt.currency)}</h2>
@@ -60,30 +57,17 @@ export function AdminPayments() {
           </section>
         ))
       )}
-      <div className="actions">
-        {cursor && (
-          <button className="text-link" onClick={() => setCursor("")}>
-            First page
-          </button>
-        )}
-        {result.data?.next_cursor && (
-          <button
-            className="button secondary"
-            onClick={() => setCursor(result.data!.next_cursor!)}
-          >
-            Next page →
-          </button>
-        )}
-      </div>
     </>
   );
 }
 export function AdminPeople() {
   const [cursor, setCursor] = useState("");
-  const users = useResource<Page<User & { active: boolean }>>(
+  const users = useResource<
+    Page<Omit<User, "roles"> & { roles?: User["roles"] | null; active: boolean }>
+  >(
     `/admin/users?${new URLSearchParams({ cursor })}`,
   );
-  const reviewers = useResource<Page<User>>("/admin/reviewers");
+  const reviewers = useResource<Page<User & { email_verified: boolean; active: boolean }>>("/admin/reviewers");
   const [error, setError] = useState<Error>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -148,27 +132,32 @@ export function AdminPeople() {
         </section>
         <section className="panel">
           <h2>Reviewer approval</h2>
+          {reviewers.loading && <Loading />}
           {reviewers.data?.items.map((user) => (
             <div className="assignment-row" key={user.id}>
               <div>
                 <strong>{user.name}</strong>
                 <p>{user.email}</p>
+                <small>Awaiting admin decision</small>
+                {!user.active && <small>Account inactive</small>}
               </div>
               <button
                 className="button secondary small"
-                disabled={busy}
+                disabled={busy || !user.active}
                 onClick={async () => {
                   const reason = window.prompt(
                     `Reason for approving ${user.name} as reviewer:`,
                   );
-                  if (!reason) return;
+                  if (!reason?.trim()) return;
+                  setError(undefined);
                   setBusy(true);
                   try {
                     await command(`/admin/reviewers/${user.id}/approve`, {
                       reason,
                     });
-                    setMessage("Reviewer approval recorded.");
+                    setMessage("Reviewer approval recorded. Decision email queued.");
                     await reviewers.reload();
+                    await users.reload();
                   } catch (e) {
                     setError(e as Error);
                   } finally {
@@ -177,6 +166,28 @@ export function AdminPeople() {
                 }}
               >
                 Approve
+              </button>
+              <button
+                className="button secondary small"
+                disabled={busy || !user.active}
+                onClick={async () => {
+                  const reason = window.prompt(`Reason for rejecting ${user.name} as reviewer:`);
+                  if (!reason?.trim()) return;
+                  setError(undefined);
+                  setBusy(true);
+                  try {
+                    await command(`/admin/reviewers/${user.id}/reject`, { reason });
+                    setMessage("Reviewer application rejected. Decision email queued.");
+                    await reviewers.reload();
+                    await users.reload();
+                  } catch (e) {
+                    setError(e as Error);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Reject
               </button>
             </div>
           ))}
@@ -210,7 +221,7 @@ export function AdminPeople() {
                     <strong>{user.name}</strong>
                     <small>{user.email}</small>
                   </td>
-                  <td>{user.roles.join(", ")}</td>
+                  <td>{user.roles?.join(", ") || "Not provided"}</td>
                   <td>{user.active ? "Active" : "Inactive"}</td>
                   <td>
                     <button
@@ -269,6 +280,14 @@ export function AdminPeople() {
   );
 }
 export function AdminSettings() {
+  const [activeTab, setActiveTab] = useState(0);
+  const tabs = [
+    { id: "workflow", label: "Workflow settings", content: <SettingsEditor /> },
+    { id: "subjects", label: "Subjects", content: <Taxonomy kind="subjects" /> },
+    { id: "outlets", label: "Publication outlets", content: <Taxonomy kind="outlets" /> },
+    { id: "templates", label: "Templates", content: <RecordEditor kind="templates" title="Versioned templates" /> },
+    { id: "issues", label: "Journal issues", content: <RecordEditor kind="issues" title="Journal issues" /> },
+  ];
   return (
     <>
       <div className="page-heading">
@@ -281,69 +300,87 @@ export function AdminSettings() {
           </p>
         </div>
       </div>
-      <div className="settings-grid">
-        <SettingsEditor />
-        <Taxonomy kind="subjects" />
-        <Taxonomy kind="outlets" />
-        <RecordEditor kind="templates" title="Versioned templates" />
-        <RecordEditor kind="issues" title="Journal issues" />
+      <div className="tabs settings-tabs" role="tablist" aria-label="Admin settings">
+        {tabs.map((tab, index) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={`settings-tab-${tab.id}`}
+            aria-controls={`settings-panel-${tab.id}`}
+            aria-selected={activeTab === index}
+            tabIndex={activeTab === index ? 0 : -1}
+            className={activeTab === index ? "selected" : undefined}
+            onClick={() => setActiveTab(index)}
+            onKeyDown={(event) => {
+              let next = index;
+              if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+              else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+              else if (event.key === "Home") next = 0;
+              else if (event.key === "End") next = tabs.length - 1;
+              else return;
+              event.preventDefault();
+              setActiveTab(next);
+              document.getElementById(`settings-tab-${tabs[next].id}`)?.focus();
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+      {tabs.map((tab, index) => (
+        <div
+          key={tab.id}
+          className="settings-tab-panel"
+          role="tabpanel"
+          id={`settings-panel-${tab.id}`}
+          aria-labelledby={`settings-tab-${tab.id}`}
+          hidden={activeTab !== index}
+          tabIndex={0}
+        >
+          {tab.content}
+        </div>
+      ))}
     </>
   );
 }
 function SettingsEditor() {
-  const resource = useResource<{
-    lock_version: number;
-    schema_version: number;
-    [key: string]: unknown;
-  }>("/admin/settings");
+  const resource = useResource<{ version: number; values: {
+    publication_fee_minor: number; payment_instructions: string; max_live_assignments: number;
+  } }>("/admin/settings");
   const [error, setError] = useState<Error>();
   const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
   return (
     <section className="panel">
       <h2>Workflow settings</h2>
       <ErrorNotice error={error || resource.error} retry={resource.reload} />
-      {saved && (
-        <p role="status" className="subtle">
-          Settings saved.
-        </p>
-      )}
+      {resource.loading && <Loading />}
+      {saved && <p role="status" className="subtle">Settings saved. Existing invoices keep their original fee.</p>}
       {resource.data && (
-        <form
-          key={JSON.stringify(resource.data)}
-          className="form-stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              const payload = JSON.parse(
-                String(new FormData(e.currentTarget).get("settings")),
-              );
-              await api("/admin/settings", {
-                method: "PUT",
-                headers: { "If-Match": String(resource.data!.lock_version) },
-                body: JSON.stringify(payload),
-              });
-              setSaved(true);
-              await resource.reload();
-            } catch (e) {
-              setError(e as Error);
-            }
-          }}
-        >
-          <label>
-            Schema-versioned configuration
-            <textarea
-              name="settings"
-              rows={12}
-              required
-              defaultValue={JSON.stringify(resource.data, null, 2)}
-            />
-            <small>
-              Use the backend configuration schema. No database credentials or
-              secrets.
-            </small>
-          </label>
-          <button className="button">Save settings</button>
+        <form className="form-stack" key={resource.data.version} onSubmit={async event => {
+          event.preventDefault();
+          setError(undefined);
+          setSaved(false);
+          setBusy(true);
+          const fields = new FormData(event.currentTarget);
+          try {
+            await command("/admin/settings", {
+              review_duration_hours: 120,
+              publication_fee_minor: Math.round(Number(fields.get("fee")) * 100),
+              max_live_assignments: Number(fields.get("capacity")),
+              payment_instructions: String(fields.get("instructions")),
+            });
+            setSaved(true);
+            await resource.reload();
+          } catch (error) { setError(error as Error); }
+          finally { setBusy(false); }
+        }}>
+          <label>Review deadline<input value="5 days from assignment" readOnly /></label>
+          <label>Publication fee (INR)<input name="fee" type="number" required min="0.01" step="0.01" defaultValue={resource.data.values.publication_fee_minor / 100} /></label>
+          <label>Maximum active assignments per reviewer<input name="capacity" type="number" required min={1} max={100} defaultValue={resource.data.values.max_live_assignments} /></label>
+          <label>Payment instructions<textarea name="instructions" required minLength={5} maxLength={4000} defaultValue={resource.data.values.payment_instructions} /></label>
+          <button className="button" disabled={busy}>Save settings</button>
         </form>
       )}
     </section>

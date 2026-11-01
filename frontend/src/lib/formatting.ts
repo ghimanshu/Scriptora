@@ -2,9 +2,11 @@ import type { ArticleStatus } from "@/types/api";
 export const statusLabels: Record<ArticleStatus, string> = {
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
-  IN_REVIEW: "In review",
-  REVIEWED: "Changes requested",
+  ASSIGNED: "Assigned",
+  REJECTED: "Rejected (changes requested)",
   APPROVED: "Approved",
+  PAID: "Paid (awaiting verification)",
+  PAYMENT_APPROVED: "Payment approved",
   PUBLISH: "Published",
 };
 export function money(amount: number, currency = "INR") {

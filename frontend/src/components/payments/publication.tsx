@@ -36,16 +36,12 @@ export function PublicationForm({
               {
                 approved_version_id: article.approved_version_id,
                 final_file_id: fields.get("final_file_id"),
-                expected_version: article.lock_version,
-                publication: {
-                  title: fields.get("title"),
-                  slug: fields.get("slug"),
-                  public_authors: String(fields.get("authors"))
-                    .split(",")
-                    .map((s) => s.trim()),
-                  issue_id: fields.get("issue_id") || undefined,
-                  published_at: new Date().toISOString(),
-                },
+                title: fields.get("title"),
+                slug: fields.get("slug"),
+                public_authors: String(fields.get("authors"))
+                  .split(",")
+                  .map((s) => s.trim()),
+                issue_id: fields.get("issue_id") || undefined,
               },
               key.current,
             );

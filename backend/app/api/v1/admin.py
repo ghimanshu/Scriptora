@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import String, cast, delete, func, or_, select
 
 from app.api.deps import admin, database, roles
 from app.api.idempotency import IdempotentRoute
@@ -16,17 +16,17 @@ from app.db.session import db_now
 from app.models.articles import Article
 from app.models.audit import AuditEvent
 from app.models.notifications import OutboxEvent
-from app.models.payments import PaymentAttempt
+from app.models.payments import Invoice, PaymentAttempt
 from app.models.reviews import Assignment
 from app.models.taxonomy import SettingsVersion, Subject
 from app.models.users import ReviewerProfile, User, UserRole
 from app.repositories.articles import expected, locked_article
 from app.repositories.assignments import LIVE, live_assignment
-from app.schemas.admin import Extend, Policy, Reassign, UserUpdate
+from app.schemas.admin import DeleteArticle, Extend, Policy, Reassign, UserUpdate
 from app.schemas.payments import Publish, Verify, VerifyPublish
 from app.schemas.reviews import Reason
 from app.services import assignments, payments, publishing
-from app.services.notifications import audit
+from app.services.notifications import audit, emit
 
 router = APIRouter(prefix="/admin", route_class=IdempotentRoute)
 
@@ -38,12 +38,35 @@ def users(
     user=Depends(admin),
     db=Depends(database),
 ):
-    return page(db, User, select(User), limit, cursor, ("password_hash",))
+    result = page(db, User, select(User), limit, cursor, ("password_hash",))
+    for item in result["items"]:
+        item["name"] = item["display_name"]
+        item["roles"] = sorted(roles(db, db.get(User, UUID(item["id"]))))
+    return result
 
 
 @router.get("/reviewers")
 def reviewers(user=Depends(admin), db=Depends(database)):
-    return [record(p) for p in db.scalars(select(ReviewerProfile).limit(100))]
+    rows = db.execute(
+        select(User, ReviewerProfile)
+        .join(ReviewerProfile, ReviewerProfile.user_id == User.id)
+        .where(ReviewerProfile.approved.is_(False), ReviewerProfile.rejected.is_(False))
+        .order_by(User.created_at, User.id)
+        .limit(100)
+    )
+    return {
+        "items": [
+            {
+                "id": str(target.id),
+                "name": target.display_name,
+                "email": target.email,
+                "email_verified": target.email_verified_at is not None,
+                "active": target.active,
+            }
+            for target, profile in rows
+        ],
+        "next_cursor": None,
+    }
 
 
 @router.get("/articles")
@@ -53,23 +76,77 @@ def articles(
     user=Depends(admin),
     db=Depends(database),
 ):
-    return page(db, Article, select(Article), limit, cursor)
+    result = page(
+        db,
+        Article,
+        select(Article).where(Article.status.not_in(("DRAFT", "DELETED"))),
+        limit,
+        cursor,
+    )
+    from app.models.articles import ArticleVersion
+
+    for item in result["items"]:
+        version = db.get(ArticleVersion, UUID(item["current_version_id"]))
+        item["title"] = version.data.get("title", "")
+        item["current_version_number"] = version.version_number
+    return result
+
+
+@router.delete("/articles/{article_id}")
+def delete_article(
+    article_id: UUID, data: DeleteArticle, user=Depends(admin), db=Depends(database)
+):
+    from app.services.article_deletion import remove
+
+    return remove(db, article_id, user, data.reason)
 
 
 @router.post("/reviewers/{reviewer_id}/approve")
 def approve(reviewer_id: UUID, data: Reason, user=Depends(admin), db=Depends(database)):
-    target = db.get(User, reviewer_id)
-    if not target or not target.active or not target.email_verified_at:
-        fail("VERIFIED_USER_REQUIRED", 422)
-    profile = db.get(ReviewerProfile, target.id)
+    return decide_reviewer(db, reviewer_id, data, user, approve=True)
+
+
+@router.post("/reviewers/{reviewer_id}/reject")
+def reject_reviewer(reviewer_id: UUID, data: Reason, user=Depends(admin), db=Depends(database)):
+    return decide_reviewer(db, reviewer_id, data, user, approve=False)
+
+
+def decide_reviewer(db, reviewer_id, data, actor, approve):
+    target = db.scalar(select(User).where(User.id == reviewer_id).with_for_update())
+    if not target or not target.active:
+        fail("ACTIVE_USER_REQUIRED", 422)
+    profile = db.scalar(
+        select(ReviewerProfile).where(ReviewerProfile.user_id == reviewer_id).with_for_update()
+    )
     if not profile:
-        profile = ReviewerProfile(user_id=target.id)
-        db.add(profile)
-    profile.approved, profile.approved_by = True, user.id
-    if "REVIEWER" not in roles(db, target):
-        db.add(UserRole(user_id=target.id, role="REVIEWER"))
-    audit(db, user, "APPROVE_REVIEWER", target, {"reason": data.reason})
-    return {"approved": True}
+        fail("REVIEWER_APPLICATION_NOT_FOUND", 404)
+    if profile.approved or profile.rejected:
+        fail("REVIEWER_APPLICATION_ALREADY_DECIDED", 409)
+    profile.approved, profile.rejected = approve, not approve
+    if approve:
+        profile.approved_by = actor.id
+        if "REVIEWER" not in roles(db, target):
+            db.add(UserRole(user_id=target.id, role="REVIEWER"))
+    kind = "REVIEWER_APPROVED" if approve else "REVIEWER_REJECTED"
+    extra = {
+        "title": "Reviewer application approved" if approve else "Reviewer application rejected",
+        "message": "Your reviewer application has been "
+        + ("approved." if approve else "rejected."),
+        "reason": data.reason,
+        "path": "/login",
+    }
+    if approve and not target.email_verified_at:
+        one_time(db, target, "VERIFY_EMAIL", event_kind=kind, extra=extra)
+    else:
+        emit(db, target.id, kind, [target.id], f"reviewer-decision:{target.id}", extra)
+    audit(
+        db,
+        actor,
+        "APPROVE_REVIEWER" if approve else "REJECT_REVIEWER",
+        target,
+        {"reason": data.reason},
+    )
+    return {"approved": approve, "rejected": not approve}
 
 
 @router.patch("/users/{user_id}")
@@ -112,68 +189,76 @@ def update_user(user_id: UUID, data: UserUpdate, user=Depends(admin), db=Depends
     return record(target, ("password_hash",))
 
 
+@router.get("/articles/{article_id}/reviewers")
+def eligible_reviewers(article_id: UUID, user=Depends(admin), db=Depends(database)):
+    article = locked_article(db, article_id)
+    if article.status != "SUBMITTED" or live_assignment(db, article.id):
+        fail("ARTICLE_NOT_AVAILABLE_FOR_ASSIGNMENT")
+    candidates = db.scalars(
+        select(User)
+        .join(ReviewerProfile, ReviewerProfile.user_id == User.id)
+        .where(ReviewerProfile.approved.is_(True))
+        .order_by(User.display_name, User.id)
+    ).all()
+    return {
+        "items": [
+            {"id": str(target.id), "name": target.display_name, "email": target.email}
+            for target in candidates
+            if assignments.eligible(db, target, article) and assignments.capacity(db, target)
+        ]
+    }
+
+
+@router.post("/articles/{article_id}/assign")
 @router.post("/articles/{article_id}/reassign")
 def reassign(article_id: UUID, data: Reassign, user=Depends(admin), db=Depends(database)):
+    db.execute(select(func.pg_advisory_xact_lock_shared(17004)))
     article = locked_article(db, article_id)
     expected(article, data.expected_version)
-    if article.status not in ("SUBMITTED", "IN_REVIEW"):
+    if live_assignment(db, article_id):
+        fail("ARTICLE_ALREADY_ASSIGNED")
+    if article.status != "SUBMITTED":
         fail("INVALID_TRANSITION")
-    current = live_assignment(db, article_id)
-    if current:
-        assignments.revoke(db, article, current, user, data.reason)
-    if data.reviewer_id:
-        target = db.scalar(select(User).where(User.id == data.reviewer_id).with_for_update())
-        if not assignments.eligible(db, target, article) or not assignments.capacity(db, target):
-            fail("REVIEWER_INELIGIBLE", 422)
-        return record(assignments.new_assignment(db, article, target, db_now(db)))
-    return record(article)
+    if not data.reviewer_id:
+        fail("REVIEWER_REQUIRED", 422)
+    target = db.scalar(select(User).where(User.id == data.reviewer_id).with_for_update())
+    if not assignments.eligible(db, target, article) or not assignments.capacity(db, target):
+        fail("REVIEWER_INELIGIBLE", 422)
+    assignment = assignments.new_assignment(db, article, target, db_now(db))
+    audit(
+        db,
+        user,
+        "ADMIN_ASSIGNED_REVIEWER",
+        article,
+        {"reviewer_id": str(target.id), "reason": data.reason},
+    )
+    return record(assignment)
 
 
 @router.post("/assignments/{assignment_id}/extend")
 def extend(assignment_id: UUID, data: Extend, user=Depends(admin), db=Depends(database)):
-    hint = db.get(Assignment, assignment_id)
-    if not hint:
-        fail("ASSIGNMENT_NOT_FOUND", 404)
-    article = locked_article(db, hint.article_id)
-    a = db.scalar(
-        select(Assignment)
-        .where(Assignment.id == assignment_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    now = db_now(db)
-    if assignments.expire(db, article, a, now):
-        db.commit()
-        fail("ASSIGNMENT_EXPIRED")
-    if a.state not in LIVE or data.new_due_at <= a.due_at:
-        fail("INVALID_EXTENSION")
-    a.due_at = data.new_due_at
-    audit(
-        db,
-        user,
-        "EXTEND_ASSIGNMENT",
-        a,
-        {"reason": data.reason, "due_at": data.new_due_at.isoformat()},
-    )
-    from app.services.notifications import emit
-
-    emit(
-        db,
-        article.id,
-        "DEADLINE_EXTENDED",
-        [a.reviewer_id],
-        f"extend:{a.id}:{data.new_due_at.isoformat()}",
-    )
-    return record(a)
+    fail("FIXED_REVIEW_DEADLINE", 409)
 
 
 @router.get("/payments")
 def payment_list(user=Depends(admin), db=Depends(database)):
+    rows = db.execute(
+        select(PaymentAttempt, Invoice)
+        .join(Invoice, Invoice.id == PaymentAttempt.invoice_id)
+        .join(Article, Article.id == Invoice.article_id)
+        .where(PaymentAttempt.status == "SUBMITTED", Article.status == "PAID")
+        .order_by(PaymentAttempt.created_at)
+        .limit(100)
+    )
     return [
-        record(p)
-        for p in db.scalars(
-            select(PaymentAttempt).where(PaymentAttempt.status == "SUBMITTED").limit(100)
-        )
+        {
+            **record(attempt),
+            "article_id": str(invoice.article_id),
+            "currency": invoice.currency,
+            "reference": attempt.reference_normalized,
+            "reason": attempt.rejection_reason,
+        }
+        for attempt, invoice in rows
     ]
 
 
@@ -202,7 +287,6 @@ def verify_publish(
     # Lock requested article first, then validate payment belongs to it before mutation.
     article = locked_article(db, article_id)
     hint = db.get(PaymentAttempt, data.payment_attempt_id)
-    from app.models.payments import Invoice
 
     if not hint or db.get(Invoice, hint.invoice_id).article_id != article.id:
         fail("PAYMENT_ARTICLE_MISMATCH", 422)
@@ -227,6 +311,45 @@ def change_settings(data: Policy, user=Depends(admin), db=Depends(database)):
     db.flush()
     audit(db, user, "SETTINGS_CHANGED", item)
     return record(item)
+
+
+@router.get("/audit-events")
+def audit_events(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    search: str = Query("", max_length=200),
+    user=Depends(admin),
+    db=Depends(database),
+):
+    query = select(AuditEvent)
+    term = search.strip()
+    if term:
+        query = query.where(
+            or_(
+                AuditEvent.action.icontains(term, autoescape=True),
+                AuditEvent.entity_type.icontains(term, autoescape=True),
+                cast(AuditEvent.entity_id, String).icontains(term, autoescape=True),
+                AuditEvent.request_id.icontains(term, autoescape=True),
+                AuditEvent.actor_id.in_(
+                    select(User.id).where(User.display_name.icontains(term, autoescape=True))
+                ),
+            )
+        )
+    result = page(db, AuditEvent, query, limit, cursor, ("data",))
+    actor_ids = {UUID(item["actor_id"]) for item in result["items"] if item["actor_id"]}
+    actors = (
+        {
+            str(actor.id): actor.display_name
+            for actor in db.scalars(select(User).where(User.id.in_(actor_ids)))
+        }
+        if actor_ids
+        else {}
+    )
+    for item in result["items"]:
+        item["event_type"] = item["action"]
+        item["actor_name"] = actors.get(item["actor_id"])
+        item["summary"] = f"{item['action']}: {item['entity_type']} {item['entity_id']}"
+    return result
 
 
 @router.get("/audit")

@@ -19,6 +19,8 @@ def access(db, invoice, user):
     if not invoice:
         fail("INVOICE_NOT_FOUND", 404)
     article = db.get(Article, invoice.article_id)
+    if not article or article.status == "DELETED":
+        fail("INVOICE_NOT_FOUND", 404)
     if article.author_id != user.id and "ADMIN" not in roles(db, user):
         fail("INVOICE_NOT_FOUND", 404)
 
@@ -27,7 +29,7 @@ def access(db, invoice, user):
 def invoice(article_id: UUID, user=Depends(current_user), db=Depends(database)):
     item = db.scalar(select(Invoice).where(Invoice.article_id == article_id))
     access(db, item, user)
-    return record(item)
+    return {**record(item), "payment_attempts": []}
 
 
 @router.post("/invoices/{invoice_id}/payment-attempts", status_code=201)
@@ -39,7 +41,7 @@ def submit(invoice_id: UUID, data: PaymentInput, user=Depends(current_user), db=
 def attempts(invoice_id: UUID, user=Depends(current_user), db=Depends(database)):
     access(db, db.get(Invoice, invoice_id), user)
     return [
-        record(p)
+        {**record(p), "reference": p.reference_normalized, "reason": p.rejection_reason}
         for p in db.scalars(
             select(PaymentAttempt).where(PaymentAttempt.invoice_id == invoice_id)
         ).all()

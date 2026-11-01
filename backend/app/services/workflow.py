@@ -1,13 +1,13 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.api.deps import require_role, roles
 from app.core.errors import fail
 from app.db.session import db_now
-from app.models.articles import Article, ArticleVersion, File, VersionAuthor
+from app.models.articles import Article, ArticleSubject, ArticleVersion, File, VersionAuthor
 from app.models.reviews import Assignment, Review, ReviewComment, ReviewRound, RevisionResponse
-from app.models.taxonomy import Outlet, Subject, Template
+from app.models.taxonomy import Outlet, PublicationType, Subject, Template
 from app.models.users import User
 from app.repositories.articles import expected, locked_article
 from app.services.assignments import capacity, eligible, new_assignment, pool, transition
@@ -15,12 +15,20 @@ from app.services.notifications import admins, emit
 
 
 def owner(article, user):
-    if article.author_id != user.id:
+    if not article or article.status == "DELETED" or article.author_id != user.id:
         fail("ARTICLE_NOT_FOUND", 404)
 
 
 def can_read(db, article, user):
-    if article.author_id == user.id or "ADMIN" in roles(db, user):
+    if not article or article.status == "DELETED":
+        fail("ARTICLE_NOT_FOUND", 404)
+    if article.author_id == user.id:
+        return
+    if article.status == "DRAFT":
+        fail("ARTICLE_NOT_FOUND", 404)
+    if "ADMIN" in roles(db, user):
+        return
+    if article.status == "SUBMITTED" and eligible(db, user, article):
         return
     assignment = db.scalar(
         select(Assignment).where(
@@ -34,32 +42,69 @@ def can_read(db, article, user):
         fail("ARTICLE_NOT_FOUND", 404)
 
 
-def create_draft(db, user, data):
-    require_role(db, user, "AUTHOR")
-    subject, outlet, template = (
-        db.get(Subject, data.primary_subject_id),
-        db.get(Outlet, data.outlet_id),
-        db.get(Template, data.template_id),
-    )
+def validate_classification(db, subject_id, outlet_id, template_id, publication_type_id=None):
+    subject = db.get(Subject, subject_id) if subject_id else None
+    outlet = db.get(Outlet, outlet_id) if outlet_id else None
+    template = db.get(Template, template_id) if template_id else None
+    kind = db.get(PublicationType, outlet.type_id) if outlet else None
     if (
-        not subject
-        or not subject.active
+        (subject_id and (not subject or not subject.active))
         or not outlet
         or not outlet.active
         or not template
         or not template.active
         or template.outlet_id != outlet.id
+        or not kind
+        or not kind.active
+        or (publication_type_id and publication_type_id != outlet.type_id)
     ):
         fail("INVALID_CLASSIFICATION", 422)
+    return subject, outlet, template
+
+
+def update_draft_classification(db, article, version, data):
+    changed = data.model_fields_set
+    subject_id = (
+        data.primary_subject_id if "primary_subject_id" in changed else article.primary_subject_id
+    )
+    outlet_id = data.outlet_id if "outlet_id" in changed else article.outlet_id
+    template_id = data.template_id if "template_id" in changed else article.template_id
+    kind_id = data.publication_type_id if "publication_type_id" in changed else None
+    if "publication_type_id" in changed and kind_id is None:
+        fail("INVALID_CLASSIFICATION", 422)
+    subject, outlet, template = validate_classification(
+        db, subject_id, outlet_id, template_id, kind_id
+    )
+    old_subject = article.primary_subject_id
+    if old_subject and old_subject != subject_id:
+        db.execute(
+            delete(ArticleSubject).where(
+                ArticleSubject.article_id == article.id, ArticleSubject.subject_id == old_subject
+            )
+        )
+    if subject and not db.get(ArticleSubject, (article.id, subject.id)):
+        db.add(ArticleSubject(article_id=article.id, subject_id=subject.id))
+    article.primary_subject_id = subject.id if subject else None
+    article.outlet_id, article.template_id = outlet.id, template.id
+    version.template_id = template.id
+
+
+def create_draft(db, user, data):
+    require_role(db, user, "AUTHOR")
+    subject, outlet, template = validate_classification(
+        db, data.primary_subject_id, data.outlet_id, data.template_id, data.publication_type_id
+    )
     article = Article(
         tracking_number="ART-" + uuid.uuid4().hex.upper(),
         author_id=user.id,
-        primary_subject_id=subject.id,
+        primary_subject_id=subject.id if subject else None,
         outlet_id=outlet.id,
         template_id=template.id,
     )
     db.add(article)
     db.flush()
+    if subject:
+        db.add(ArticleSubject(article_id=article.id, subject_id=subject.id))
     version = create_version(db, article, user, data)
     article.current_version_id = version.id
     return article
@@ -67,7 +112,7 @@ def create_draft(db, user, data):
 
 def create_version(db, article, user, data):
     owner(article, user)
-    if article.status not in ("DRAFT", "REVIEWED"):
+    if article.status not in ("DRAFT", "REJECTED"):
         fail("VERSION_CREATION_FORBIDDEN")
     number = (
         db.scalar(
@@ -106,6 +151,11 @@ def clean_file(db, file_id, user_id=None, kind=None, article_id=None):
 
 def freeze(db, article, version, user, now):
     metadata = version.data
+    if not article.primary_subject_id:
+        fail("SUBJECT_REQUIRED", 422)
+    subject = db.get(Subject, article.primary_subject_id)
+    if not subject or not subject.active:
+        fail("INVALID_CLASSIFICATION", 422)
     template = db.get(Template, article.template_id)
     rules = template.validation_schema
     if (
@@ -125,7 +175,15 @@ def freeze(db, article, version, user, now):
 
     count = word_count(file)
     if not rules.get("min_words", 1) <= count <= rules.get("max_words", 100000):
-        fail("WORD_COUNT_OUTSIDE_TEMPLATE", 422)
+        fail(
+            "WORD_COUNT_OUTSIDE_TEMPLATE",
+            422,
+            details={
+                "word_count": count,
+                "min_words": rules.get("min_words", 1),
+                "max_words": rules.get("max_words", 100000),
+            },
+        )
     file.article_id = article.id
     for i, author in enumerate(metadata["authors"], 1):
         account = db.scalar(select(User).where(User.email == author["email"].lower()))
@@ -148,7 +206,7 @@ def submit(db, article_id, user, command, revision=False):
     article = locked_article(db, article_id)
     owner(article, user)
     expected(article, command.expected_version)
-    if article.status != ("REVIEWED" if revision else "DRAFT"):
+    if article.status != ("REJECTED" if revision else "DRAFT"):
         fail("INVALID_TRANSITION")
     version = db.get(
         ArticleVersion, command.new_version_id if revision else article.current_version_id
@@ -162,12 +220,15 @@ def submit(db, article_id, user, command, revision=False):
             .join(Assignment, Assignment.id == Review.assignment_id)
             .where(
                 Assignment.article_id == article.id,
+                Review.version_id == article.current_version_id,
                 Review.decision == "REQUEST_REVISION",
                 Review.submitted_at.is_not(None),
             )
             .order_by(Review.submitted_at.desc())
             .limit(1)
         )
+        if not predecessor:
+            fail("REVIEW_FEEDBACK_REQUIRED", 409)
         comments = db.scalars(
             select(ReviewComment).where(ReviewComment.review_id == predecessor.id)
         ).all()
@@ -201,13 +262,26 @@ def submit(db, article_id, user, command, revision=False):
     transition(db, article, "SUBMITTED", "RESUBMITTED" if revision else "SUBMITTED", user)
     if predecessor:
         reviewer = db.scalar(
-            select(User).where(User.id == predecessor.reviewer_id).with_for_update()
+            select(User)
+            .where(User.id == predecessor.reviewer_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if eligible(db, reviewer, article) and capacity(db, reviewer):
-            new_assignment(db, article, reviewer, db_now(db), reserved=True)
+            new_assignment(db, article, reviewer, db_now(db))
             return article
         emit(
-            db, article.id, "RESERVATION_UNAVAILABLE", admins(db), f"reservation-failed:{round.id}"
+            db,
+            article.id,
+            "REVISION_REVIEWER_UNAVAILABLE",
+            admins(db),
+            f"revision-reviewer-unavailable:{round.id}",
+            {
+                "title": "Revision needs a reviewer",
+                "message": "The previous reviewer cannot take this revision. Assign an eligible reviewer.",
+                "path": f"/admin/articles/{article.id}",
+                "previous_reviewer_id": str(predecessor.reviewer_id),
+            },
         )
     pool(db, article)
     return article

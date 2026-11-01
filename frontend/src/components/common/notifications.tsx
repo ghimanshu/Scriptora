@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useResource, ErrorNotice, Empty, Loading } from "./data";
 import { command } from "@/lib/api-client";
 import { date } from "@/lib/formatting";
@@ -31,8 +32,12 @@ export function Notifications() {
           resource.data?.items.map((item) => (
             <article className="notification" key={item.id}>
               <div>
-                <strong>{item.title}</strong>
-                <p>{item.message}</p>
+                <strong>{item.title || item.payload?.title || item.type}</strong>
+                <p>{item.message || item.payload?.message}</p>
+                {item.payload?.reason && <p>Reason: {item.payload.reason}</p>}
+                {item.type === "REVIEWER_APPLICATION" && (
+                  <Link href="/admin/users" className="text-link">Review application</Link>
+                )}
                 <small>{date(item.created_at)}</small>
               </div>
               {!item.read_at && (

@@ -19,6 +19,31 @@ from app.services.assignments import eligible
 from app.services.notifications import admins, emit
 
 
+def event_body(kind, payload, app_url):
+    if kind in ("ARTICLE_APPROVED", "ARTICLE_REJECTED"):
+        body = payload["message"] + "\n" + app_url + payload["path"]
+        if kind == "ARTICLE_APPROVED":
+            body += f"\nPublication fee: {payload['currency']} {payload['amount_minor'] / 100:.2f}"
+            body += "\nPayment instructions: " + payload["payment_instructions"]
+        return body
+    if kind == "ARTICLE_DELETED":
+        return (
+            f"Your article {payload['tracking_number']} ({payload['article_title']}) "
+            f"has been deleted by an administrator.\nReason: {payload['reason']}"
+        )
+    if kind == "REVIEWER_APPLICATION":
+        return (
+            f"Reviewer application: {payload['applicant_name']} ({payload['applicant_email']}). "
+            f"Review and approve or reject at {app_url}/admin/users."
+        )
+    if kind in ("REVIEWER_APPROVED", "REVIEWER_REJECTED"):
+        message = payload["message"] + "\nReason: " + payload["reason"]
+        if kind == "REVIEWER_APPROVED":
+            message += f"\nSign in after verifying your email: {app_url}/login"
+        return message
+    return f"{kind}: visit {app_url} to view details."
+
+
 def run():
     factory = session_factory()
     with factory.begin() as db:
@@ -33,7 +58,7 @@ def run():
             targets = []
             for raw in payload.get("recipients", []):
                 user = db.get(User, uuid.UUID(raw))
-                if not user or not user.active:
+                if not user or (not user.active and event.type != "ARTICLE_DELETED"):
                     continue
                 if event.type == "AVAILABLE":
                     article = db.get(Article, event.aggregate_id)
@@ -86,14 +111,15 @@ def run():
                 if delivery.state != "SENT":
                     targets.append((delivery.id, user.email))
             kind = event.type
-            body = f"{kind}: visit {get_settings().public_app_url} to view details."
+            body = event_body(kind, payload, get_settings().public_app_url)
             if "encrypted_token" in payload:
                 route = {
                     "VERIFY_EMAIL": "verify-email",
+                    "REVIEWER_APPROVED": "verify-email",
                     "RESET_PASSWORD": "reset-password",
                     "REVIEWER_INVITE": "accept-reviewer-invitation",
                 }[kind]
-                body = f"Open {get_settings().public_app_url}/{route}?token={unseal(payload['encrypted_token'])}"
+                body += f"\nOpen this link: {get_settings().public_app_url}/{route}?token={unseal(payload['encrypted_token'])}"
         for delivery_id, email in targets:
             send_email(email, "Scriptora: " + kind.replace("_", " ").title(), body)
             with factory.begin() as db:

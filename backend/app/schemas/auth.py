@@ -1,7 +1,10 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 
 class Register(BaseModel):
+    role: Literal["AUTHOR", "REVIEWER"] = "AUTHOR"
     email: EmailStr
     display_name: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=12, max_length=128)
