@@ -33,6 +33,8 @@ stateDiagram-v2
 
 ### Saving a draft
 
+On My Articles, authors open or edit articles through their titles. The Action column contains only Delete for their own drafts. Clicking Delete opens a popup explaining the effect, with an optional reason, Cancel, and a final Delete draft button. Only `DRAFT` articles can be deleted; submitted, assigned, rejected, approved, paid, payment-approved, and published articles are protected, including against admin deletion requests. Draft deletion is enforced by the backend and removes the article from normal lists and access while preserving its audit history.
+
 The first tab saves the selected publication type, outlet, and submission template as a private `DRAFT`. Subject is selected on the second tab alongside the manuscript information. Saving that tab persists the subject as well as the title, abstract, keywords, authors, and declarations collected so far.
 
 Draft saves send classification fields on both creation and updates. Returning to the first tab allows publication selections to be changed while the article is still a draft. Reopening the saved draft also lets its author select or change the primary subject. A draft may temporarily have no subject, but submission for review requires an active subject.

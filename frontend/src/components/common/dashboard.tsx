@@ -135,44 +135,6 @@ export function Dashboard({
               </div>
             ))}
           </div>
-          <div className="welcome-banner">
-            <div>
-              <span className="eyebrow">
-                FROM MANUSCRIPT TO MEANINGFUL IMPACT
-              </span>
-              <h2>Good research deserves to be read.</h2>
-              <p>
-                A considered process. Expert perspectives. A place for your
-                voice.
-              </p>
-              <Link
-                href={area === "author" ? "/author/articles/new" : "/articles"}
-              >
-                {area === "author"
-                  ? "Begin your next submission"
-                  : "Explore the published library"}{" "}
-                <span>→</span>
-              </Link>
-            </div>
-            <div className="book-illustration" aria-hidden="true">
-              <div className="book-back" />
-              <div className="book-front">
-                <span>SCRIPTORA</span>
-                <div className="book-lines" />
-                <strong>
-                  Ideas
-                  <br />
-                  into
-                  <br />
-                  <em>impact.</em>
-                </strong>
-                <span>THE NEXT CHAPTER</span>
-              </div>
-              <div className="orbit orbit-one" />
-              <div className="orbit orbit-two" />
-              <span className="spark">✳</span>
-            </div>
-          </div>
         </>
       )}
       <section className="panel">
@@ -261,6 +223,7 @@ export function Dashboard({
           ) : (
             <ArticleTable
               area={area}
+              onDeleted={() => void page.reload()}
               articles={items.filter(
                 (a) =>
                   (filter === "ALL" || a.status === filter) &&

@@ -186,7 +186,8 @@ export interface paths {
         get: operations["detail_api_v1_articles__article_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Draft */
+        delete: operations["delete_draft_api_v1_articles__article_id__delete"];
         options?: never;
         head?: never;
         /** Edit */
@@ -1944,6 +1945,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_draft_api_v1_articles__article_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                article_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteArticle"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -20,6 +20,10 @@ def save_review(db, assignment_id, user, data, final=True):
         fail("APPROVAL_CHECKLIST_INCOMPLETE", 422)
     if final and data.decision == "REQUEST_REVISION" and not data.numbered_comments:
         fail("REVISION_COMMENTS_REQUIRED", 422)
+    if final and data.decision == "APPROVE":
+        version, settings = policy(db)
+        if not str(settings.get("payment_instructions") or "").strip():
+            fail("PAYMENT_DESTINATION_NOT_CONFIGURED", 422)
     if not review:
         review = Review(
             assignment_id=assignment.id, reviewer_id=user.id, version_id=assignment.version_id
@@ -40,9 +44,6 @@ def save_review(db, assignment_id, user, data, final=True):
         accepted = data.decision == "APPROVE"
         transition(db, article, "APPROVED" if accepted else "REJECTED", data.decision, user)
         if accepted:
-            version, settings = policy(db)
-            if not settings.get("payment_instructions"):
-                fail("PAYMENT_DESTINATION_NOT_CONFIGURED", 422)
             article.approved_version_id = article.current_version_id
             db.add(
                 Invoice(

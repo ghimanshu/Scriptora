@@ -1,4 +1,7 @@
+"use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { DeleteArticle } from "./delete-article";
 import type { Article } from "@/types/api";
 import { date, statusLabels } from "@/lib/formatting";
 import { Empty } from "@/components/common/data";
@@ -13,10 +16,13 @@ export function Status({ status }: { status: Article["status"] }) {
 export function ArticleTable({
   articles,
   area = "author",
+  onDeleted,
 }: {
   articles: Article[];
   area?: "author" | "admin";
+  onDeleted?: () => void;
 }) {
+  const router = useRouter();
   if (!articles.length)
     return (
       <Empty title="Your next chapter starts here">
@@ -39,19 +45,14 @@ export function ArticleTable({
             <th>STATUS</th>
             <th>SUBMITTED</th>
             <th>VERSION</th>
-            <th>
-              <span className="sr-only">Open</span>
-            </th>
+            <th>ACTIONS</th>
           </tr>
         </thead>
         <tbody>
           {articles.map((article) => (
             <tr key={article.id}>
               <td>
-                <Link
-                  href={`/${area}/articles/${article.id}`}
-                  className="article-title"
-                >
+                <Link className="article-title" href={`/${area}/articles/${article.id}`}>
                   {article.title || "Untitled manuscript"}
                 </Link>
                 <small>
@@ -69,17 +70,15 @@ export function ArticleTable({
                 </span>
               </td>
               <td>
-                <Link
-                  className="row-arrow"
-                  href={`/${area}/articles/${article.id}`}
-                  aria-label={`Open ${article.title}`}
-                >
-                  {area === "author" && article.status === "DRAFT"
-                    ? "Edit draft"
-                    : area === "author" && article.status === "REJECTED"
-                      ? "Revise article"
-                      : "↗"}
-                </Link>
+                <div className="actions">
+                  {area === "admin" && <button type="button" className="button secondary small"
+                    onClick={() => router.push(`/${area}/articles/${article.id}`)}>
+                    View
+                  </button>}
+                  {area === "author" && article.status === "DRAFT" && (
+                    <DeleteArticle articleId={article.id} title={article.title || "Untitled manuscript"} onDeleted={onDeleted} />
+                  )}
+                </div>
               </td>
             </tr>
           ))}

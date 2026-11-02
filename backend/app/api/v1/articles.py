@@ -13,6 +13,7 @@ from app.models.reviews import Assignment, Review, ReviewComment, StatusHistory
 from app.models.taxonomy import Outlet, Subject
 from app.repositories.articles import locked_article
 from app.repositories.assignments import live_assignment
+from app.schemas.admin import DeleteArticle
 from app.schemas.articles import Draft, DraftUpdate, Expected, Resubmit, VersionInput
 from app.services import workflow
 
@@ -55,6 +56,15 @@ def list_articles(
 @router.post("/articles", status_code=201)
 def create(data: Draft, user=Depends(current_user), db=Depends(database)):
     return record(workflow.create_draft(db, user, data))
+
+
+@router.delete("/articles/{article_id}")
+def delete_draft(
+    article_id: UUID, data: DeleteArticle, user=Depends(current_user), db=Depends(database)
+):
+    from app.services.article_deletion import remove
+
+    return remove(db, article_id, user, data.reason)
 
 
 @router.get("/articles/{article_id}")

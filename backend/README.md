@@ -102,14 +102,11 @@ Reviewer self-registration queues a REVIEWER_APPLICATION event for admins only. 
 After updating to this version, run `alembic upgrade head` before restarting the API and `python -m app.workers.main`. Migration 0006_reviewer_decisions adds a rejection flag while preserving existing approvals. SMTP and the outbox worker must be running for emails and notifications to be delivered.
 
 
-## Admin article deletion
+## Draft article deletion
 
-Administrators can delete an article at any stage with `DELETE /api/v1/admin/articles/{article_id}` and JSON `{"reason":"Duplicate submission"}`. Send an `Idempotency-Key` and the usual authentication/CSRF headers. The admin article workspace includes a deletion form. Reasons are trimmed and must contain 3?2000 characters. The response is `{"deleted":true,"article_id":"..."}`. Retrying the same payload and key replays the response without duplicate email; a new deletion request for a deleted/missing article returns 404.
+Authors can delete only their own DRAFT articles using DELETE /api/v1/articles/{article_id} with a reason, authentication, and an Idempotency-Key. The frontend provides a confirmed Delete button in the article list and draft workspace. All other statuses return DRAFT_REQUIRED for an owner request; requests targeting another author's article return 404. The legacy admin deletion endpoint uses the same owner/draft guards and cannot delete submitted or published articles.
 
-Deletion sets the article to `DELETED`, removes normal article/file and public publication access, revokes active/reserved reviews, and voids open invoices. Existing paid invoices, payments, publication records, and review/audit history remain stored. No automatic refund is issued. The administrator, prior status, and reason are recorded. An `ARTICLE_DELETED` outbox event queues an author notification and email containing the title, tracking number, and reason, including for inactive authors. Email delivery requires SMTP and the outbox worker.
-
-Run `alembic upgrade head` for migration `0007_article_deletion`, then restart the API and worker. The frontend proxy permits the new admin DELETE endpoint.
-
+Deletion sets DELETED, hides the record and its files from normal access, and preserves audit/version records. Retrying the same successful key and body replays the response. No new database migration is required; the existing DELETED status is reused.
 
 Article workflow (migration 0008_article_workflow): DRAFT -> SUBMITTED -> ASSIGNED -> APPROVED -> PAID -> PAYMENT_APPROVED -> PUBLISH. Reviewer change requests set REJECTED; only the author can create a revised version and resubmit it. The previous reviewer is assigned a new five-day review by default; unavailable or ineligible previous reviewers trigger an admin notification and leave the article SUBMITTED. DRAFT records and their files, versions, and timeline are private to the author, including against administrator access. Admin lists exclude drafts. Approved subject-matched reviewers can inspect submitted articles before claiming. Admins choose an eligible reviewer with GET /admin/articles/{id}/reviewers and POST /admin/articles/{id}/assign; the legacy /reassign endpoint now has the same unassigned-only guard. Existing live assignments cannot be replaced. Both admin assignment and reviewer self-claim use article/reviewer locks and the unique live-assignment index.
 

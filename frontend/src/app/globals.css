@@ -583,6 +583,30 @@ label small {
   color: #64748b;
   font-size: 40px;
 }
+.confirmation-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 40px);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 20px 70px #0f172a33;
+}
+.confirmation-dialog::backdrop {
+  background: #0f172a66;
+}
+.confirmation-dialog > p {
+  margin: 12px 0 20px;
+  color: var(--muted);
+  white-space: normal;
+}
+.confirmation-dialog textarea {
+  min-height: 88px;
+}
+.confirmation-actions {
+  justify-content: flex-end;
+}
 .panel {
   background: white;
   border: 1px solid var(--line);

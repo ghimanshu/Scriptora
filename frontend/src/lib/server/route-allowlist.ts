@@ -7,6 +7,7 @@ const rules: [string, string][] = [
   ["POST", "auth/(register|verify-email|forgot-password|reset-password)"],
   ["GET|POST", "articles"],
   ["GET|PATCH", `articles/${uuid}`],
+  ["DELETE", `articles/${uuid}`],
   ["POST", `articles/${uuid}/(submit|resubmit|claim|conflicts)`],
   ["GET|POST", `articles/${uuid}/versions`],
   ["PATCH", `articles/${uuid}/versions/${uuid}`],

@@ -68,6 +68,9 @@ export async function safeResponse(upstream: Response, requestId: string) {
       429: "Too many requests. Please try again later.",
     };
     let validationMessage: string | undefined;
+    if (upstream.status === 422 && code === "PAYMENT_DESTINATION_NOT_CONFIGURED") {
+      validationMessage = "Approval is blocked because payment instructions have not been configured. Ask an administrator to save payment instructions in Admin Settings, then retry the review.";
+    }
     if (upstream.status === 422 && code === "MANUSCRIPT_TEXT_UNREADABLE") {
       validationMessage = "We could not read text from your manuscript. Upload a text-based PDF or DOCX. Scanned PDFs need OCR before uploading.";
     }

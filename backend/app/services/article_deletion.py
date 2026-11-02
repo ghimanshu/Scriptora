@@ -2,6 +2,7 @@
 
 from sqlalchemy import select, update
 
+from app.core.errors import fail
 from app.db.session import db_now
 from app.models.articles import ArticleVersion, File
 from app.models.payments import Invoice
@@ -9,10 +10,14 @@ from app.models.reviews import Assignment, StatusHistory
 from app.repositories.articles import locked_article
 from app.repositories.assignments import LIVE
 from app.services.notifications import audit, emit
+from app.services.workflow import owner
 
 
 def remove(db, article_id, actor, reason):
     article = locked_article(db, article_id)
+    owner(article, actor)
+    if article.status != "DRAFT":
+        fail("DRAFT_REQUIRED", 409)
     now = db_now(db)
     previous_status = article.status
     version = (
@@ -75,7 +80,7 @@ def remove(db, article_id, actor, reason):
         f"article-deleted:{article.id}",
         {
             "title": "Article deleted",
-            "message": f"Your article {article.tracking_number} has been deleted by an administrator.",
+            "message": f"Your article {article.tracking_number} has been deleted by its author.",
             "article_title": title,
             "tracking_number": article.tracking_number,
             "reason": reason,

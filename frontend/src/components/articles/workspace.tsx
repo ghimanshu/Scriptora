@@ -308,7 +308,7 @@ export function ArticleWorkspace({
               {admin && allowedActions.includes("PUBLISH") && (
                 <PublicationForm article={a} onDone={article.reload} />
               )}{" "}
-              {admin && <DeleteArticle articleId={id} />}
+              {canEditDraft && <DeleteArticle articleId={id} title={a.title || "Untitled manuscript"} />}
               {admin && allowedActions.includes("ASSIGN") && (
                 <AdminAssignment article={a} onDone={article.reload} />
               )}

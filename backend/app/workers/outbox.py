@@ -29,7 +29,7 @@ def event_body(kind, payload, app_url):
     if kind == "ARTICLE_DELETED":
         return (
             f"Your article {payload['tracking_number']} ({payload['article_title']}) "
-            f"has been deleted by an administrator.\nReason: {payload['reason']}"
+            f"has been deleted.\nReason: {payload['reason']}"
         )
     if kind == "REVIEWER_APPLICATION":
         return (

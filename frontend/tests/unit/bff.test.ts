@@ -27,7 +27,8 @@ describe("BFF trust boundaries", () => {
     ])
       expect(allowed("POST", path)).toBe(false);
     expect(allowed("GET", `files/${id}/download`)).toBe(true);
-    expect(allowed("DELETE", `articles/${id}`)).toBe(false);
+    expect(allowed("DELETE", `articles/${id}`)).toBe(true);
+    expect(allowed("DELETE", "articles/invalid")).toBe(false);
     expect(allowed("DELETE", `admin/articles/${id}`)).toBe(true);
     expect(allowed("DELETE", "admin/articles/invalid")).toBe(false);
     expect(publicPath(`admin/articles/${id}`)).toBe(false);
@@ -114,6 +115,15 @@ describe("BFF trust boundaries", () => {
       else expect(body.error.message).toContain("outside the template limits");
       expect(JSON.stringify(body)).not.toContain("private storage");
     }
+  });
+  it("explains the missing payment configuration to reviewers", async () => {
+    const response = await safeResponse(new Response(JSON.stringify({ detail: {
+      code: "PAYMENT_DESTINATION_NOT_CONFIGURED",
+    } }), { status: 422 }), "trace");
+    const body = await response.json();
+    expect(body.error.code).toBe("PAYMENT_DESTINATION_NOT_CONFIGURED");
+    expect(body.error.message).toContain("Admin Settings");
+    expect(body.error.message).toContain("retry the review");
   });
   it("does not relay backend redirects", async () => {
     const response = await safeResponse(
