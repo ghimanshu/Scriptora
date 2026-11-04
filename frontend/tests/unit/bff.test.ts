@@ -12,6 +12,11 @@ afterEach(() => {
 describe("BFF trust boundaries", () => {
   it("allows documented commands and rejects arbitrary destinations and generic status updates", () => {
     expect(allowed("POST", `articles/${id}/claim`)).toBe(true);
+    expect(allowed("GET", "notifications/summary")).toBe(true);
+    expect(allowed("POST", "notifications/read-all")).toBe(true);
+    expect(allowed("POST", `notifications/${id}/read`)).toBe(true);
+    expect(allowed("POST", `notifications/${id}/unread`)).toBe(true);
+    expect(allowed("POST", "notifications/invalid/read")).toBe(false);
     expect(allowed("POST", `admin/reviewers/${id}/approve`)).toBe(true);
     expect(allowed("POST", `admin/reviewers/${id}/reject`)).toBe(true);
     expect(allowed("GET", `admin/articles/${id}/reviewers`)).toBe(true);

@@ -120,7 +120,7 @@ def expire(db, article, assignment, now):
             db,
             article.id,
             "EXPIRED",
-            [assignment.reviewer_id, article.author_id],
+            [assignment.reviewer_id, article.author_id, *admins(db)],
             f"expired:{assignment.id}",
         )
         db.flush()
@@ -151,7 +151,18 @@ def new_assignment(db, article, user, now):
         "ASSIGNED",
         user,
     )
-    emit(db, article.id, "ASSIGNED", [user.id, article.author_id], f"assigned:{assignment.id}")
+    emit(
+        db,
+        article.id,
+        "ASSIGNED",
+        [user.id, article.author_id, *admins(db)],
+        f"assigned:{assignment.id}",
+        {
+            "assignment_id": str(assignment.id),
+            "reviewer_id": str(user.id),
+            "due_at": assignment.due_at.isoformat(),
+        },
+    )
     return assignment
 
 
@@ -212,5 +223,13 @@ def revoke(db, article, assignment, actor, reason, state="REVOKED"):
     assignment.completed_at = db_now(db)
     assignment.end_reason = reason
     transition(db, article, "SUBMITTED", state, actor, reason)
+    emit(
+        db,
+        article.id,
+        "ASSIGNMENT_RELEASED",
+        [article.author_id, assignment.reviewer_id, *admins(db)],
+        f"released:{assignment.id}",
+        {"reason": reason},
+    )
     db.flush()
     pool(db, article)

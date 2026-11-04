@@ -7,6 +7,7 @@ import { Icon } from "./icon";
 import type { Area } from "./shell";
 import type { Article, Page, Assignment } from "@/types/api";
 import { deadline } from "@/lib/formatting";
+import { NotificationPreview } from "./notification-preview";
 export function Dashboard({
   area,
   list = false,
@@ -80,6 +81,7 @@ export function Dashboard({
               : "Review payments"}
         </Link>
       </div>
+      {!list && <NotificationPreview area={area} />}
       {!list && (
         <>
           <div className="stats-grid">

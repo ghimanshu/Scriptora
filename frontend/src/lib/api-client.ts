@@ -45,7 +45,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       data?.error?.request_id,
     );
   }
-  return response.status === 204 ? (undefined as T) : response.json();
+  const data = response.status === 204 ? undefined : await response.json();
+  if (init.method && !["GET", "HEAD"].includes(init.method.toUpperCase()) &&
+      !path.startsWith("/auth/") && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("notifications:changed"));
+  }
+  return data as T;
 }
 export function command<T>(
   path: string,

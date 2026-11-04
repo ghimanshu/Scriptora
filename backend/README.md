@@ -1,6 +1,6 @@
 # Scriptora publishing backend
 
-FastAPI backend for the workflow in [Application_Design.md](../Application_Design.md). This directory now contains executable source, nine Alembic migrations, PostgreSQL workers, private file adapters, and tests. The separate Next.js frontend/BFF is outside this backend implementation.
+FastAPI backend for the workflow in [Application_Design.md](../Application_Design.md). This directory now contains executable source, ten Alembic migrations, PostgreSQL workers, private file adapters, and tests. The separate Next.js frontend/BFF is outside this backend implementation.
 
 Implemented: verified author registration, Argon2id passwords, rotating refresh sessions with replay revocation, reviewer invitations/approval/subscriptions, taxonomy and immutable template/policy versions, draft/version submission, exclusive reviewer leases, revision reservations, feedback, invoices, payment reconciliation, publication, public catalog/downloads, notifications, audits, and idempotent business commands.
 
@@ -121,3 +121,10 @@ Selected primary subjects are stored in articles.primary_subject_id and synchron
 
 
 Revision resubmission preserves the original submitted version and structured responses. Authors can edit title/abstract and either retain the existing manuscript or upload a clean replacement. The reviewer who requested changes on the current submitted version is selected under a reviewer row lock, with the usual approval, subject, conflict, availability, and capacity checks. A new ACTIVE assignment starts immediately with a fresh 120-hour deadline; the article becomes ASSIGNED. This is not a reservation requiring the reviewer to start it. No schema migration is required for this resubmission policy change.
+
+
+Notification inbox (migration 0010_notification_inbox): every emit call now records the intended recipients' unread Notification rows in the same transaction as the business action and OutboxEvent. A rollback removes all three. The email worker keeps its deduplicated insert as a fallback for older events; retries never reset read_at or create duplicate notifications. SMTP failures do not delay in-app updates. Encrypted tokens and recipient lists are excluded from notification payloads and responses.
+
+Authenticated notification APIs: GET /api/v1/notifications/summary returns unread_count, total_count and the latest five notifications. GET /api/v1/notifications accepts status=all|read|unread, limit (1-100), and a descending cursor. Responses include title, message, read_at, is_read, and a workspace-safe href. POST /api/v1/notifications/{id}/read and /unread change one notification, and POST /api/v1/notifications/read-all marks the current user's existing unread notifications as read. All mutations require Idempotency-Key. Users cannot read or update another user's notifications.
+
+Migration 0010 adds recipient/date and partial unread indexes, and backfills missing notification copies from stored event recipients with ON CONFLICT DO NOTHING. Existing read timestamps are preserved. Run alembic upgrade head and restart the API/worker. The frontend polls summaries every 30 seconds while visible and refreshes on focus, navigation, and successful actions. No WebSocket connection is required.

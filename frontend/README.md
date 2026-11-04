@@ -2,6 +2,14 @@
 
 This directory contains the Next.js frontend for the publishing application. It provides author, reviewer, and admin workspaces and proxies browser API requests to the separate backend.
 
+## Notifications
+
+Every intended email recipient also receives a persistent unread in-app notification when the action is saved. Notifications do not wait for email delivery, and email failures or retries do not reset read status or create duplicate notifications.
+
+The workspace bell and sidebar show the unread count. Author, reviewer, and admin dashboards also show the count and recent unread updates. Counts refresh after actions, when the window regains focus, and every 30 seconds while visible. Each workspace has a Notifications page with newest-first history, All/Unread/Read filters, individual read/unread controls, mark-all-as-read, and older-page navigation. Opening a notification's details marks it as read.
+
+The backend exposes `GET /notifications/summary`, filtered `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/{id}/unread`, and `POST /notifications/read-all`. Requests use the frontend `/api/v1` proxy; mutation requests include an idempotency key. Every endpoint is restricted to the signed-in user's notifications. Migration `0010_notification_inbox` adds query indexes and backfills missing notifications from existing events while preserving read status.
+
 ## Article workflow
 
 ```mermaid
@@ -62,7 +70,7 @@ Payment approval does not automatically publish an article. Publication is a sep
 
 ### Backend requirements
 
-The backend enforces every transition and permission; frontend controls reflect those rules. Apply backend migrations through `0009_draft_subjects` before using this workflow, then restart the API and worker. The worker processes notifications, email deliveries, and assignment expiry; SMTP must be configured for email delivery. See the [backend README](../backend/README.md) for setup and migration instructions.
+The backend enforces every transition and permission; frontend controls reflect those rules. Apply backend migrations through `0010_notification_inbox` before using this workflow, then restart the API and worker. In-app notifications are recorded with their business action. The worker processes email deliveries and assignment expiry; SMTP must be configured for email delivery. See the [backend README](../backend/README.md) for setup and migration instructions.
 
 Migration `0008_article_workflow` maps legacy `IN_REVIEW` to `ASSIGNED` and `REVIEWED` to `REJECTED`, derives payment states from existing records, and aligns active assignment deadlines with the fixed five-day policy.
 

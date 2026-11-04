@@ -66,7 +66,7 @@ def test_existing_article_states_survive_workflow_migration(pg, pg_engine, statu
             assert state == status
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0009_draft_subjects"
+                == "0010_notification_inbox"
             )
     finally:
         command.upgrade(config, "head")

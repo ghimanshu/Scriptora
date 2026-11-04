@@ -20,6 +20,7 @@ def test_deadline_boundary_and_expiry_deduplication(monkeypatch, offset, expires
     events, pools = Mock(), Mock()
     monkeypatch.setattr(assignments, "emit", events)
     monkeypatch.setattr(assignments, "pool", pools)
+    monkeypatch.setattr(assignments, "admins", lambda db: [])
     monkeypatch.setattr(
         assignments, "transition", lambda db, a, state, event: setattr(a, "status", state)
     )

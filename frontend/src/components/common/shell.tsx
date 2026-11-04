@@ -6,6 +6,7 @@ import { Icon } from "./icon";
 import { useResource, ErrorNotice } from "./data";
 import { api } from "@/lib/api-client";
 import type { Role, User } from "@/types/api";
+import { NotificationProvider, useNotifications } from "./notification-context";
 const nav = {
   author: [
     ["", "Overview", "grid"],
@@ -43,6 +44,12 @@ export function Brand() {
 export function Shell({
   area,
   children,
+}: { area: Area; children: React.ReactNode }) {
+  return <NotificationProvider><WorkspaceShell area={area}>{children}</WorkspaceShell></NotificationProvider>;
+}
+function WorkspaceShell({
+  area,
+  children,
 }: {
   area: Area;
   children: React.ReactNode;
@@ -52,6 +59,8 @@ export function Shell({
   const { data: user } = useResource<User>("/me");
   const [error, setError] = useState<Error>();
   const role = area.toUpperCase() as Role;
+  const { summary } = useNotifications();
+  const unread = summary?.unread_count || 0;
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -73,21 +82,12 @@ export function Shell({
               {label}
             </Link>
           ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Icon name="leaf" />
-            <strong>Ideas deserve an audience.</strong>
-            <p>Thoughtful publishing, from first draft to final page.</p>
-            <Link href="/articles">
-              Explore publications <span>↗</span>
-            </Link>
-          </div>
           <Link className="nav-item" href={`/${area}/notifications`}>
             <Icon name="bell" />
             Notifications
+            {unread > 0 && <span className="notification-count">{unread > 99 ? "99+" : unread}</span>}
           </Link>
-        </div>
+        </nav>
         </div>
         <div className="sidebar-footer">
           <div className="user-card">
@@ -143,10 +143,11 @@ export function Shell({
             )}
             <Link
               href={`/${area}/notifications`}
-              className="icon-button"
-              aria-label="Notifications"
+              className="icon-button notification-bell"
+              aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
             >
               <Icon name="bell" />
+              {unread > 0 && <span className="notification-count" aria-hidden="true">{unread > 99 ? "99+" : unread}</span>}
             </Link>
             <span className="avatar small">
               {user?.name?.slice(0, 1) || "S"}

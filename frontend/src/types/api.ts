@@ -110,10 +110,21 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
-  read_at?: string;
+  read_at?: string | null;
+  is_read?: boolean;
+  href?: string | null;
   created_at: string;
   type?: string;
-  payload?: { title?: string; message?: string; reason?: string; path?: string };
+  payload?: { title?: string; message?: string; reason?: string; path?: string; article_title?: string };
+}
+export interface NotificationSummary {
+  unread_count: number;
+  total_count: number;
+  items: Notification[];
+}
+export interface NotificationPage extends Page<Notification> {
+  unread_count: number;
+  total_count: number;
 }
 export interface Page<T> {
   items: T[];

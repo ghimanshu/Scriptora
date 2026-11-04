@@ -87,7 +87,7 @@ def setup_article(db):
 def test_migration_revision_and_constraints(pg):
     assert (
         pg.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        == "0009_draft_subjects"
+        == "0010_notification_inbox"
     )
     indexes = set(pg.scalars(text("SELECT indexname FROM pg_indexes WHERE schemaname='public'")))
     assert {

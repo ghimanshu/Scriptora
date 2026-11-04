@@ -172,5 +172,5 @@ def test_migration_refuses_to_discard_subjectless_drafts_on_downgrade(pg, pg_eng
     with pg_engine.connect() as connection:
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            == "0009_draft_subjects"
+            == "0010_notification_inbox"
         )

@@ -56,7 +56,7 @@ def submit_payment(db, invoice_id, user, data):
     db.add(attempt)
     db.flush()
     transition(db, article, "PAID", "PAYMENT_SUBMITTED", user)
-    emit(db, article.id, "PAYMENT_SUBMITTED", admins(db), f"payment:{attempt.id}")
+    emit(db, article.id, "PAYMENT_SUBMITTED", [article.author_id, *admins(db)], f"payment:{attempt.id}")
     return attempt
 
 

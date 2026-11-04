@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +28,17 @@ class Notification(Entity, Base):
     type: Mapped[str]
     payload: Mapped[dict] = mapped_column(JSONB)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    __table_args__ = (UniqueConstraint("recipient_id", "event_id"),)
+    __table_args__ = (
+        UniqueConstraint("recipient_id", "event_id"),
+        Index("ix_notifications_recipient_created", "recipient_id", "created_at", "id"),
+        Index(
+            "ix_notifications_recipient_unread",
+            "recipient_id",
+            "created_at",
+            "id",
+            postgresql_where=text("read_at IS NULL"),
+        ),
+    )
 
 
 class EmailDelivery(Entity, Base):

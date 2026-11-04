@@ -260,6 +260,13 @@ def submit(db, article_id, user, command, revision=False):
     article.current_round_id = round.id
     article.submitted_at = now
     transition(db, article, "SUBMITTED", "RESUBMITTED" if revision else "SUBMITTED", user)
+    emit(
+        db,
+        article.id,
+        "ARTICLE_RESUBMITTED" if revision else "ARTICLE_SUBMITTED",
+        [article.author_id, *admins(db)],
+        f"submission:{round.id}",
+    )
     if predecessor:
         reviewer = db.scalar(
             select(User)
